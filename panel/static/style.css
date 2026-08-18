@@ -2071,12 +2071,12 @@ input.input-error:focus {
 .info-modal-title-wrap {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.85rem;
 }
 
 .info-user-avatar {
-    width: 38px;
-    height: 38px;
+    width: 40px;
+    height: 40px;
     background: rgba(116, 82, 255, 0.15);
     border: 1.5px solid var(--border-dark);
     border-radius: var(--radius-md);
@@ -2088,36 +2088,43 @@ input.input-error:focus {
     flex-shrink: 0;
 }
 
+.info-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding: 1.5rem;
+}
+
 /* User Live Network Card */
 .user-live-net-card {
     background: linear-gradient(145deg, #131728, #181d33);
     border: var(--border-width) solid var(--primary);
     border-radius: var(--radius-md);
-    padding: 1rem 1.15rem;
+    padding: 1.15rem 1.25rem;
     box-shadow: var(--shadow-sm);
     animation: liveNetGlow 3s infinite ease-in-out;
 }
 
 @keyframes liveNetGlow {
     0%, 100% { border-color: rgba(116, 82, 255, 0.85); box-shadow: 2px 2px 0px #000000; }
-    50% { border-color: #00f0ff; box-shadow: 2px 2px 8px rgba(0, 240, 255, 0.25), 2px 2px 0px #000000; }
+    50% { border-color: #00f0ff; box-shadow: 2px 2px 10px rgba(0, 240, 255, 0.25), 2px 2px 0px #000000; }
 }
 
 .live-net-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0.85rem;
-    padding-bottom: 0.6rem;
+    margin-bottom: 0.95rem;
+    padding-bottom: 0.65rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .live-net-title {
     display: flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.5rem;
     font-family: var(--font-heading);
-    font-size: 0.88rem;
+    font-size: 0.9rem;
     font-weight: 800;
     color: #ffffff;
 }
@@ -2134,18 +2141,18 @@ input.input-error:focus {
 .live-net-speed-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
+    gap: 0.85rem;
+    margin-bottom: 0.85rem;
 }
 
 .speed-box {
     background: #0d0f19;
     border: 1.5px solid var(--border-dark);
     border-radius: var(--radius-sm);
-    padding: 0.65rem 0.85rem;
+    padding: 0.75rem 0.9rem;
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.25rem;
     box-shadow: 1.5px 1.5px 0px #000000;
 }
 
@@ -2175,17 +2182,17 @@ input.input-error:focus {
 .live-session-stats {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    gap: 0.5rem;
+    gap: 0.6rem;
     background: rgba(0, 0, 0, 0.25);
     border-radius: var(--radius-sm);
-    padding: 0.55rem 0.75rem;
+    padding: 0.6rem 0.85rem;
     border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .session-stat-item {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
+    gap: 0.2rem;
 }
 
 .session-stat-item .stat-lbl {
@@ -2197,77 +2204,9 @@ input.input-error:focus {
 
 .session-stat-item .stat-val {
     font-family: var(--font-heading);
-    font-size: 0.76rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: var(--text-primary);
-}
-
-/* User Last Connected Device Card */
-.user-device-card {
-    background: var(--bg-card);
-    border: var(--border-width) solid var(--border-dark);
-    border-radius: var(--radius-md);
-    padding: 1rem 1.15rem;
-    box-shadow: var(--shadow-sm);
-}
-
-.device-card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.85rem;
-    padding-bottom: 0.6rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.device-card-title {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-family: var(--font-heading);
-    font-size: 0.88rem;
-    font-weight: 800;
-    color: #ffffff;
-}
-
-.device-os-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--accent-cyan);
-}
-
-.device-card-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
-}
-
-.device-grid-item {
-    background: #121422;
-    border: 1.5px solid var(--border-dark);
-    border-radius: var(--radius-sm);
-    padding: 0.55rem 0.75rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    box-shadow: 1px 1px 0px #000000;
-}
-
-.device-grid-item .dev-lbl {
-    font-size: 0.68rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: var(--text-muted);
-}
-
-.device-grid-item .dev-val {
-    font-family: var(--font-heading);
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    word-break: break-all;
 }
 
 /* Account Overview Card */
@@ -2275,40 +2214,46 @@ input.input-error:focus {
     background: var(--bg-surface);
     border: var(--border-width) solid var(--border-dark);
     border-radius: var(--radius-md);
-    padding: 1rem 1.15rem;
+    padding: 1.15rem 1.25rem;
     box-shadow: var(--shadow-sm);
 }
 
 .account-card-header {
     display: flex;
     align-items: center;
-    margin-bottom: 0.75rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    margin-bottom: 0.9rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .account-card-title {
     display: flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.5rem;
     font-family: var(--font-heading);
-    font-size: 0.85rem;
+    font-size: 0.88rem;
     font-weight: 800;
-    color: var(--text-secondary);
+    color: var(--text-primary);
 }
 
 .account-info-grid {
     display: flex;
     flex-direction: column;
-    gap: 0.55rem;
+    gap: 0.65rem;
 }
 
 .account-info-grid .info-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 0.82rem;
-    padding: 0.15rem 0;
+    font-size: 0.84rem;
+    padding: 0.25rem 0;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.04);
+}
+
+.account-info-grid .info-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
 }
 
 .account-info-grid .info-label {
@@ -2327,8 +2272,7 @@ input.input-error:focus {
 }
 
 @media (max-width: 540px) {
-    .live-net-speed-row,
-    .device-card-grid {
+    .live-net-speed-row {
         grid-template-columns: 1fr;
     }
     .live-session-stats {

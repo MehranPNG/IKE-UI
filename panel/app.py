@@ -56,7 +56,7 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.4.1"
 
 app = Flask(
     __name__,
@@ -292,7 +292,7 @@ def init_db():
             pass
 
         try:
-            cursor.execute("ALTER TABLE users ADD COLUMN last_device_info TEXT")
+            cursor.execute("ALTER TABLE users ADD COLUMN last_ip TEXT")
         except Exception:
             pass
 
@@ -426,33 +426,6 @@ def sync_ipsec_secrets():
             subprocess.run(["ipsec", "rereadsecrets"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception as e:
             print(f"[!] Error syncing ipsec.secrets: {e}", file=sys.stderr)
-
-def detect_device_os(block_text, client_ip="", candidates=None):
-    if candidates is None:
-        candidates = []
-    for c in candidates:
-        if re.search(r'^(?:DESKTOP|LAPTOP|WIN|PC)[-_0-9A-Z]', c, re.I) or '\\' in c or 'MSFT' in c.upper():
-            return "Windows"
-    
-    if re.search(r'strongSwan', block_text, re.I):
-        return "Android (strongSwan)"
-        
-    has_ecp = bool(re.search(r'ECP_\d+|Curve25519', block_text, re.I))
-    has_gcm = bool(re.search(r'AES_GCM', block_text, re.I))
-    has_mobike = bool(re.search(r'\[MOB\]|MOBIKE', block_text, re.I))
-    has_cbc = bool(re.search(r'AES_CBC|3DES', block_text, re.I))
-    has_modp = bool(re.search(r'MODP_\d+', block_text, re.I))
-    has_prf_sha384 = bool(re.search(r'PRF_HMAC_SHA384|PRF_HMAC_SHA2_384', block_text, re.I))
-    
-    if has_gcm or (has_mobike and (has_ecp or has_prf_sha384)):
-        return "iOS / macOS"
-    elif has_cbc and has_modp and not has_mobike:
-        return "Windows"
-    elif has_mobike:
-        return "iOS / Android"
-    elif has_cbc or has_modp:
-        return "Windows"
-    return "Generic IKEv2"
 
 user_live_speeds = {}
 user_speed_lock = threading.Lock()
@@ -621,16 +594,6 @@ def fetch_online_users_raw():
                 if vip_fallback:
                     vip = vip_fallback.group(1)
                     break
-
-            # Extract IKE proposal
-            ike_proposal = ""
-            for bline in block_lines:
-                pm = re.search(r'IKE proposal:\s*([^\n\r]+)', bline, re.IGNORECASE)
-                if pm:
-                    ike_proposal = pm.group(1).strip()
-                    break
-
-            detected_os = detect_device_os(block_text, client_ip or "", candidates)
                     
             # Group per user
             if matched_user not in online:
@@ -639,9 +602,7 @@ def fetch_online_users_raw():
                     "sa_ids": [sa_id],
                     "vips": [vip] if vip else [],
                     "client_ip": client_ip or "",
-                    "os": detected_os,
                     "established": established_str,
-                    "proposal": ike_proposal,
                     "bytes_in": bytes_in,
                     "bytes_out": bytes_out,
                     "bytes_total": bytes_in + bytes_out,
@@ -654,9 +615,7 @@ def fetch_online_users_raw():
                             "bytes_total": bytes_in + bytes_out,
                             "vip": vip,
                             "client_ip": client_ip or "",
-                            "os": detected_os,
-                            "established": established_str,
-                            "proposal": ike_proposal
+                            "established": established_str
                         }
                     }
                 }
@@ -677,9 +636,7 @@ def fetch_online_users_raw():
                     "bytes_total": bytes_in + bytes_out,
                     "vip": vip,
                     "client_ip": client_ip or "",
-                    "os": detected_os,
-                    "established": established_str,
-                    "proposal": ike_proposal
+                    "established": established_str
                 }
                 online[matched_user]["device_count"] = len(online[matched_user]["sa_ids"])
 
@@ -743,20 +700,18 @@ def accounting_daemon():
                         user_deltas[username] = user_deltas.get(username, 0) + delta
                         
                 client_ip = data.get("client_ip") or ""
-                vip = (data.get("vips") or [""])[0]
-                detected_os = data.get("os", "Generic IKEv2")
-                dev_info = {
-                    "os": detected_os,
-                    "ip": client_ip,
-                    "vip": vip,
-                    "last_seen": now_str,
-                    "established": data.get("established", "")
-                }
-                cursor.execute("""
-                    UPDATE users 
-                    SET last_online_at = ?, last_device_info = ? 
-                    WHERE username = ?
-                """, (now_str, json.dumps(dev_info), username))
+                if client_ip:
+                    cursor.execute("""
+                        UPDATE users 
+                        SET last_online_at = ?, last_ip = ? 
+                        WHERE username = ?
+                    """, (now_str, client_ip, username))
+                else:
+                    cursor.execute("""
+                        UPDATE users 
+                        SET last_online_at = ? 
+                        WHERE username = ?
+                    """, (now_str, username))
                 
             for username, delta in user_deltas.items():
                 cursor.execute("""
@@ -989,26 +944,13 @@ def format_user_payload(u, online):
     except (ValueError, TypeError):
         max_dev = 10
     
-    # Device info extraction
-    raw_dev = u.get("last_device_info") if isinstance(u, dict) else (u["last_device_info"] if "last_device_info" in u.keys() else None)
-    device_info = None
-    if raw_dev:
-        try:
-            device_info = json.loads(raw_dev) if isinstance(raw_dev, str) else raw_dev
-        except Exception:
-            device_info = None
-            
+    # Last IP extraction
+    saved_last_ip = u.get("last_ip") if isinstance(u, dict) else (u["last_ip"] if "last_ip" in u.keys() else "")
+    last_ip_val = saved_last_ip or ""
     if is_on:
-        live_client_ip = online_info.get("client_ip") or (device_info.get("ip") if device_info else "")
-        live_vip = (online_info.get("vips") or [""])[0] or (device_info.get("vip") if device_info else "")
-        live_os = online_info.get("os") or (device_info.get("os") if device_info else "Generic IKEv2")
-        device_info = {
-            "os": live_os,
-            "ip": live_client_ip,
-            "vip": live_vip,
-            "last_seen": "Currently Connected",
-            "is_current": True
-        }
+        live_client_ip = online_info.get("client_ip")
+        if live_client_ip:
+            last_ip_val = live_client_ip
 
     # Live Network stats (only populated when user is online)
     live_net = None
@@ -1028,7 +970,6 @@ def format_user_payload(u, online):
             "bytes_total": format_bytes_val(bytes_in + bytes_out),
             "vip": (online_info.get("vips") or [""])[0],
             "client_ip": online_info.get("client_ip", ""),
-            "os": online_info.get("os", "Generic IKEv2"),
             "established": online_info.get("established", "")
         }
 
@@ -1040,6 +981,7 @@ def format_user_payload(u, online):
         "device_count": dev_cnt,
         "last_online_at": last_seen_raw or "",
         "last_seen_formatted": last_seen_formatted or "",
+        "last_ip": last_ip_val,
         "created_at": created_at_raw or "",
         "used_traffic_bytes": used_bytes,
         "used_traffic_formatted": format_bytes_val(used_bytes),
@@ -1051,7 +993,6 @@ def format_user_payload(u, online):
         "is_active": is_act,
         "max_devices": max_dev,
         "note": note,
-        "device_info": device_info,
         "live_net": live_net
     }
 
@@ -1687,8 +1628,8 @@ def validate_uploaded_sqlite_db(file_bytes):
             note = str(r_dict.get("note") or "").strip()
             last_online = r_dict.get("last_online_at")
             last_online = str(last_online).strip() if last_online else None
-            last_dev = r_dict.get("last_device_info")
-            last_dev = str(last_dev).strip() if last_dev else None
+            last_ip = r_dict.get("last_ip")
+            last_ip = str(last_ip).strip() if last_ip else None
 
             try:
                 max_dev = int(r_dict.get("max_devices") or 10)
@@ -1706,7 +1647,7 @@ def validate_uploaded_sqlite_db(file_bytes):
                 "is_active": is_active,
                 "note": note,
                 "last_online_at": last_online,
-                "last_device_info": last_dev,
+                "last_ip": last_ip,
                 "max_devices": max_dev
             })
 
@@ -1753,7 +1694,7 @@ def backup_users():
             is_active INTEGER DEFAULT 1,
             note TEXT DEFAULT '',
             last_online_at TEXT,
-            last_device_info TEXT,
+            last_ip TEXT,
             max_devices INTEGER DEFAULT 10
         )
         """)
@@ -1775,7 +1716,7 @@ def backup_users():
 
         for u in users:
             export_cur.execute("""
-                INSERT INTO users (username, password, max_traffic_gb, used_traffic_bytes, created_at, expire_date, is_active, note, last_online_at, last_device_info, max_devices)
+                INSERT INTO users (username, password, max_traffic_gb, used_traffic_bytes, created_at, expire_date, is_active, note, last_online_at, last_ip, max_devices)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 u.get("username"),
@@ -1787,7 +1728,7 @@ def backup_users():
                 u.get("is_active", 1),
                 u.get("note", ""),
                 u.get("last_online_at"),
-                u.get("last_device_info"),
+                u.get("last_ip"),
                 u.get("max_devices", 10)
             ))
 
@@ -1908,7 +1849,7 @@ def restore_users_execute():
         cursor.execute("DELETE FROM users;")
         for u in users:
             cursor.execute("""
-                INSERT INTO users (username, password, max_traffic_gb, used_traffic_bytes, created_at, expire_date, is_active, note, last_online_at, last_device_info, max_devices)
+                INSERT INTO users (username, password, max_traffic_gb, used_traffic_bytes, created_at, expire_date, is_active, note, last_online_at, last_ip, max_devices)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 u["username"],
@@ -1920,7 +1861,7 @@ def restore_users_execute():
                 u["is_active"],
                 u["note"],
                 u.get("last_online_at"),
-                u.get("last_device_info"),
+                u.get("last_ip"),
                 u["max_devices"]
             ))
 
