@@ -1,163 +1,114 @@
-# 🛡️ IKE-UI — All-in-One IKEv2/IPsec VPN Server & Web Panel
+# 🛡️ IKE-UI
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Release-v1.0.0-7452ff?style=for-the-badge" alt="Version 1.0.0" />
-  <img src="https://img.shields.io/badge/VPN-IKEv2%20%2F%20IPsec-blue?style=for-the-badge&logo=wireguard" alt="IKEv2 VPN" />
-  <img src="https://img.shields.io/badge/SSL-Let's%20Encrypt%20Auto-brightgreen?style=for-the-badge&logo=letsencrypt" alt="Let's Encrypt" />
-  <img src="https://img.shields.io/badge/UI-Neo--Brutalist%20Panel-ff5c5c?style=for-the-badge" alt="Neo-Brutalist Web Panel" />
-  <img src="https://img.shields.io/badge/Mobile-TCP%20MSS%20Optimized-yellow?style=for-the-badge" alt="MSS Clamped" />
-  <img src="https://img.shields.io/badge/OS-Ubuntu%20%2F%20Debian-orange?style=for-the-badge&logo=ubuntu" alt="Ubuntu / Debian" />
+> **All-in-One IKEv2/IPsec VPN Server & Web Management Panel**
+
+<p align="left">
+  <img src="https://img.shields.io/badge/Release-v1.0.0-7452ff?style=flat-square" alt="Version 1.0.0" />
+  <img src="https://img.shields.io/badge/VPN-IKEv2%20%2F%20IPsec-blue?style=flat-square" alt="IKEv2 VPN" />
+  <img src="https://img.shields.io/badge/SSL-Let's%20Encrypt%20Auto-brightgreen?style=flat-square" alt="Let's Encrypt" />
+  <img src="https://img.shields.io/badge/OS-Ubuntu%20%2F%20Debian-orange?style=flat-square" alt="Ubuntu / Debian" />
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License" />
 </p>
 
----
+**IKE-UI** is a lightweight, zero-configuration **IKEv2/IPsec VPN Server** with automated **Let's Encrypt SSL** and a real-time **Web Management Panel**.
 
-**IKE-UI** is a zero-config, production-grade **IKEv2/IPsec VPN Server** with automated **Let's Encrypt SSL** and a real-time **Web Management Panel** (CPU/RAM/Disk/Network monitoring, live user status, traffic quotas, and connection generator).
-
-It requires **ZERO client-side certificates or configuration profiles**. Users connect natively across **iOS, iPadOS, macOS, Windows 10/11, and Android** using only **Server Domain, Username, and Password**.
+It requires **NO client-side certificates or configuration profiles**. Clients connect natively on **iOS, Android, Windows, and macOS** using only Server Domain, Username, and Password.
 
 ---
 
-## 🚀 Quick Install (One-Line Command)
+## 📋 Prerequisites
 
-Run this command as `root` (or with `sudo`) on a clean Ubuntu/Debian server:
+Before installing, make sure you have:
+
+1. **Linux Server**: Ubuntu 20.04 / 22.04 / 24.04 or Debian 11 / 12 with `root` or `sudo` access.
+2. **Domain / Subdomain**: A domain (e.g. `vpn.example.com`) with an **DNS `A` Record** pointing to your server's public IP address.
+3. **Open Ports**: Ensure the following ports are open on your firewall / cloud provider:
+   - `UDP 500` & `UDP 4500` (IKEv2 / IPsec VPN)
+   - `TCP 80` & `TCP 443` (SSL Certificate & Web Panel)
+
+---
+
+## 🚀 Quick Install
+
+Run this command on your server to start the interactive installation:
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/MehranPNG/IKE-UI/main/install.sh)
 ```
-*or:*
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/MehranPNG/IKE-UI/main/install.sh)"
-```
 
-The script automatically installs dependencies, secures an SSL certificate from Let's Encrypt, configures StrongSwan & Nginx, sets up the web panel service, and binds the global `ike-ui` CLI command to your system.
+The script will automatically install dependencies, issue Let's Encrypt SSL, configure StrongSwan & Nginx, set up the web panel, and create the global `ike-ui` command.
 
 ---
 
-## ⚡ Server Management via `ike-ui` Command
+## ⚡ Server Management (`ike-ui`)
 
-Once installed, you can manage, monitor, and configure your VPN server anytime by typing `ike-ui` in your terminal:
+Once installed, you can manage your server anytime by simply running:
 
 ```bash
 ike-ui
 ```
 
-Running `ike-ui` opens the interactive manager where you can:
-- View live VPN connection statuses and active clients.
-- Start, stop, or restart all services (StrongSwan, Panel, Nginx).
-- View live logs in real time.
-- Reset the web panel admin username and password.
-- Renew SSL certificates or reconfigure domain settings.
-- Perform seamless one-click updates.
+This opens the interactive manager for checking status, restarting services, viewing live logs, managing SSL, or updating the panel.
 
-### 🛠️ Direct CLI Subcommands
+### 🛠️ Command Shortcuts
 
-You can also run subcommands directly from anywhere without opening the menu:
+You can also run subcommands directly:
 
 | Command | Description |
 | :--- | :--- |
 | `ike-ui` | Open interactive management menu |
-| `ike-ui install [domain]` | Run automated full deployment |
-| `ike-ui update` / `ike-ui -u` | Update IKE-UI to latest release |
-| `ike-ui restart` / `ike-ui -r` | Restart StrongSwan, Panel, and Nginx |
-| `ike-ui start` | Start all services |
-| `ike-ui stop` | Stop all services |
-| `ike-ui status` / `ike-ui -s` | Show service status & active VPN sessions (`ipsec statusall`) |
-| `ike-ui logs` / `ike-ui -l` | View live panel and VPN logs |
-| `ike-ui password` / `ike-ui -p` | Reset admin web panel credentials |
-| `ike-ui ssl` | Manually renew Let's Encrypt SSL certificates |
+| `ike-ui status` / `-s` | Check service status and active VPN connections |
+| `ike-ui update` / `-u` | Update IKE-UI to the latest version |
+| `ike-ui restart` / `-r` | Restart StrongSwan, Panel, and Nginx |
+| `ike-ui logs` / `-l` | View live service logs |
+| `ike-ui password` / `-p` | Reset web panel admin credentials |
+| `ike-ui ssl` | Renew Let's Encrypt SSL certificates |
+| `ike-ui start` / `stop` | Start or stop all services |
 | `ike-ui uninstall` | Completely uninstall IKE-UI |
-| `ike-ui version` / `ike-ui -v` | Show installed version & commit hash |
 
 ---
 
-## 🔄 In-Place Updates (Zero Data Loss)
+## 🔄 Updates
 
-Updating your IKE-UI server to the latest release on GitHub is instant and safe. **Your user database, credentials, and SSL certificates are never deleted or affected.**
+To update IKE-UI to the latest release on GitHub without losing any user accounts or database settings:
 
-#### Method 1: Using the CLI (Recommended)
 ```bash
 ike-ui update
 ```
 
-#### Method 2: Running the One-Liner Script
-```bash
-bash <(curl -Ls https://raw.githubusercontent.com/MehranPNG/IKE-UI/main/install.sh) update
-```
-
 ---
 
-## 🌟 Key Features
+## 📱 Client Connection Guides
 
-1. **Zero Client Certificate (Let's Encrypt RSA)**:
-   - Eliminates tedious CA installation or `.mobileconfig` profiles.
-   - Works immediately with native OS VPN clients using MSCHAPv2 / EAP.
-2. **Cellular Network Optimization (TCP MSS 1360)**:
-   - Automated TCP MSS Clamping prevents MTU packet fragmentation drops on mobile carrier networks.
-3. **Live SSE Web Management Dashboard**:
-   - Real-time CPU, RAM, Disk, and Network traffic speed meters.
-   - User creation, traffic quota limits (GB), expiration dates, and note fields.
-   - One-click client connection details copy.
-4. **Automated SSL Renewal**:
-   - Includes a Certbot deploy hook that automatically reloads StrongSwan IPsec and Nginx when certificates renew.
-
----
-
-## 📱 Client Setup Guides
-
-### 📱 iOS / iPadOS
-1. Go to **Settings** ➡️ **VPN & Device Management** ➡️ **Add VPN Configuration...**
+### 🍏 iOS / iPadOS
+1. **Settings** ➡️ **VPN & Device Management** ➡️ **Add VPN Configuration...**
 2. **Type**: `IKEv2`
-3. **Description**: `IKEv2 VPN`
-4. **Server**: `your-domain.com`
-5. **Remote ID**: `your-domain.com`
-6. **User Authentication**: `Username`
-7. **Username & Password**: *(Your user credentials)*
+3. **Server** & **Remote ID**: `your-domain.com`
+4. **User Authentication**: `Username`
+5. Enter **Username** & **Password**.
 
 ### 💻 Windows 10 & 11
-1. Go to **Settings** ➡️ **Network & Internet** ➡️ **VPN** ➡️ **Add a VPN connection**
+1. **Settings** ➡️ **Network & Internet** ➡️ **VPN** ➡️ **Add a VPN connection**
 2. **VPN provider**: `Windows (built-in)`
-3. **Connection name**: `IKEv2 VPN`
-4. **Server name or address**: `your-domain.com`
-5. **VPN type**: `IKEv2`
-6. **Type of sign-in info**: `User name and password`
-7. Enter **Username** & **Password** and click **Save**.
+3. **Server name or address**: `your-domain.com`
+4. **VPN type**: `IKEv2`
+5. **Type of sign-in info**: `User name and password`
+6. Enter **Username** & **Password**.
 
 ### 🤖 Android
-1. Go to **Settings** ➡️ **Network & internet / Connections** ➡️ **VPN** ➡️ **Add VPN (+)**
+1. **Settings** ➡️ **Connections / VPN** ➡️ **Add VPN (+)**
 2. **Type**: `IKEv2/IPSec MSCHAPv2`
-3. **Server address**: `your-domain.com`
-4. **IPSec identifier**: `your-domain.com`
-5. **CA certificate**: `(Unspecified)` or `Select automatically`
-6. Enter **Username** and **Password**.
+3. **Server address** & **IPSec identifier**: `your-domain.com`
+4. **CA certificate**: `(Unspecified)` or `Select automatically`
+5. Enter **Username** & **Password**.
 
-### 🍏 macOS
-1. Go to **System Settings** ➡️ **Network** ➡️ **VPN** ➡️ **Add VPN Configuration** ➡️ **IKEv2**
-2. **Server Address**: `your-domain.com`
-3. **Remote ID**: `your-domain.com`
-4. **Authentication**: `Username`
-5. Enter **Username** and **Password**.
-
----
-
-## 📂 Project Structure
-
-```
-IKE-UI/
-├── install.sh                 # ⚡ Master all-in-one setup & management CLI
-├── README.md                  # 📖 Project documentation
-├── panel/                     # 🌐 IKE-UI Web Panel
-│   ├── app.py                 # Backend with SSE stream & system meters
-│   ├── requirements.txt       # Python dependencies
-│   ├── static/
-│   │   └── style.css          # Neo-brutalist styling
-│   └── templates/
-│       ├── dashboard.html     # Dashboard with live meters & table
-│       ├── login.html         # Login page
-│       └── settings.html      # Settings page
-└── /etc/strongswan-panel/     # 🗄️ Persistent database & session key
-```
+### 🍎 macOS
+1. **System Settings** ➡️ **Network** ➡️ **VPN** ➡️ **Add VPN Configuration** ➡️ **IKEv2**
+2. **Server Address** & **Remote ID**: `your-domain.com`
+3. **Authentication**: `Username`
+4. Enter **Username** & **Password**.
 
 ---
 
 ## 📄 License
-Released under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](LICENSE).
