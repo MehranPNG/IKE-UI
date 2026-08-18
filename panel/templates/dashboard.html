@@ -221,7 +221,7 @@
                                     <div class="th-content">
                                         <span>User</span>
                                         <span class="sort-icon" id="sort-icon-username">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5-5"/></svg>
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>
                                         </span>
                                     </div>
                                 </th>
@@ -229,7 +229,7 @@
                                     <div class="th-content">
                                         <span>Live Status</span>
                                         <span class="sort-icon" id="sort-icon-live_status">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5-5"/></svg>
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>
                                         </span>
                                     </div>
                                 </th>
@@ -237,7 +237,7 @@
                                     <div class="th-content">
                                         <span>Data Quota</span>
                                         <span class="sort-icon" id="sort-icon-traffic">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5-5"/></svg>
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>
                                         </span>
                                     </div>
                                 </th>
@@ -245,7 +245,7 @@
                                     <div class="th-content">
                                         <span>Expiration</span>
                                         <span class="sort-icon" id="sort-icon-expiration">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5-5"/></svg>
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>
                                         </span>
                                     </div>
                                 </th>
@@ -253,7 +253,7 @@
                                     <div class="th-content">
                                         <span>Account Status</span>
                                         <span class="sort-icon" id="sort-icon-account_status">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5-5"/></svg>
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>
                                         </span>
                                     </div>
                                 </th>
@@ -979,7 +979,7 @@
         }
 
         function updateSortIcons() {
-            const iconUnsorted = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5-5"/></svg>`;
+            const iconUnsorted = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>`;
             const iconAsc = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
             const iconDesc = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>`;
 
@@ -1073,6 +1073,20 @@
         }
 
         function getPageNumbers(curr, total) {
+            const isSmallScreen = window.innerWidth <= 480;
+            if (isSmallScreen) {
+                if (total <= 5) {
+                    return Array.from({length: total}, (_, i) => i + 1);
+                }
+                if (curr <= 2) {
+                    return [1, 2, 3, '...', total];
+                }
+                if (curr >= total - 1) {
+                    return [1, '...', total - 2, total - 1, total];
+                }
+                return [1, '...', curr, '...', total];
+            }
+
             if (total <= 7) {
                 return Array.from({length: total}, (_, i) => i + 1);
             }
