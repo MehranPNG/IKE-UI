@@ -54,7 +54,7 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
 
 app = Flask(
     __name__,
@@ -343,7 +343,7 @@ def disconnect_user_sas(username, online_dict=None):
         print(f"[!] Error disconnecting SAs for {username}: {e}", file=sys.stderr)
 
 def disconnect_excess_sas(username, max_devices, online_dict=None):
-    """Disconnect oldest excess SAs if a user has more connections than max_devices."""
+    """Disconnect newly connected excess SAs if a user exceeds max_devices, keeping existing connections."""
     if not username:
         return
     try:
@@ -358,8 +358,8 @@ def disconnect_excess_sas(username, max_devices, online_dict=None):
                     sorted_sas = sorted(sa_ids, key=lambda x: int(x) if str(x).isdigit() else str(x))
                 except Exception:
                     sorted_sas = list(sa_ids)
-                excess_count = len(sorted_sas) - max_dev
-                excess_sas = sorted_sas[:excess_count]
+                # Keep the first max_dev connections (established earlier), reject/disconnect the new ones
+                excess_sas = sorted_sas[max_dev:]
                 for sa_id in excess_sas:
                     if sa_id:
                         subprocess.run(["ipsec", "down", f"ikev2-vpn[{sa_id}]"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -695,7 +695,7 @@ def accounting_daemon():
         except Exception as e:
             print(f"[!] Daemon exception: {e}", file=sys.stderr)
             
-        if shutdown_event.wait(5):
+        if shutdown_event.wait(2):
             break
 
 daemon_lock_handle = None
