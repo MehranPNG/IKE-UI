@@ -18,7 +18,7 @@ It requires **ZERO client-side certificates or configuration profiles**. Users c
 
 ## 🚀 Quick Install (One-Line Command)
 
-Run this command as `root` (or with `sudo`) on a clean Ubuntu/Debian server:
+Run this command as `root` (or with `sudo`) on an Ubuntu/Debian server:
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/MehranPNG/IKE-UI/main/install.sh)
@@ -28,7 +28,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/MehranPNG/IKE-UI/main/install.
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/MehranPNG/IKE-UI/main/install.sh)"
 ```
 
-The script automatically prepares dependencies, secures an SSL certificate from Let's Encrypt, configures StrongSwan & Nginx, sets up the web panel service, and binds the global `ike-ui` CLI command to your system.
+The script automatically installs dependencies, secures an SSL certificate from Let's Encrypt, configures StrongSwan & Nginx, sets up the web panel service, and binds the global `ike-ui` CLI command to your system.
 
 ---
 
@@ -50,41 +50,13 @@ bash <(curl -Ls https://raw.githubusercontent.com/MehranPNG/IKE-UI/main/install.
 
 ## ⚡ Management CLI (`ike-ui`)
 
-After installation, simply type `ike-ui` anywhere in your terminal to open the interactive manager:
-
-```bash
-ike-ui
-```
-
-```text
-  ██╗██╗  ██╗███████╗      ██╗   ██╗██╗
-  ██║██║ ██╔╝██╔════╝      ██║   ██║██║
-  ██║█████╔╝ █████╗  █████╗██║   ██║██║
-  ██║██╔═██╗ ██╔══╝  ╚════╝██║   ██║██║
-  ██║██║  ██╗███████╗      ╚██████╔╝██║
-  ╚═╝╚═╝  ╚═╝╚══════╝       ╚═════╝ ╚═╝
-              IKE-UI Manager
-====================================================
-
-Select an action:
-  1)  🚀 Full Install / Re-deploy
-  2)  🔄 Update IKE-UI (Pull Latest from GitHub)
-  3)  🔁 Restart All Services (StrongSwan, Panel, Nginx)
-  4)  ⏹️  Stop All Services
-  5)  ▶️  Start All Services
-  6)  📊 Check Status & Active VPN Connections
-  7)  📜 View Live Logs
-  8)  🔑 Reset Admin Panel Password
-  9)  🌐 Renew SSL Certificate
-  10) 🗑️  Uninstall IKE-UI
-  0)  ❌ Exit
-```
+After installation, simply type `ike-ui` anywhere in your terminal to open the interactive manager or execute subcommands directly.
 
 ### 🛠️ CLI Commands & Subcommands
 
 | Command | Description |
 | :--- | :--- |
-| `ike-ui` | Open interactive menu |
+| `ike-ui` | Open interactive management menu |
 | `ike-ui install [domain]` | Run automated full deployment |
 | `ike-ui update` / `ike-ui -u` | Update IKE-UI to latest release |
 | `ike-ui restart` / `ike-ui -r` | Restart StrongSwan, Panel, and Nginx |
@@ -92,7 +64,7 @@ Select an action:
 | `ike-ui stop` | Stop all services |
 | `ike-ui status` / `ike-ui -s` | Show service status & active VPN sessions (`ipsec statusall`) |
 | `ike-ui logs` / `ike-ui -l` | View live panel and VPN logs |
-| `ike-ui password` / `ike-ui -p` | Reset admin web panel password |
+| `ike-ui password` / `ike-ui -p` | Reset admin web panel credentials |
 | `ike-ui ssl` | Manually renew Let's Encrypt SSL certificates |
 | `ike-ui uninstall` | Completely uninstall IKE-UI |
 | `ike-ui version` / `ike-ui -v` | Show installed version & commit hash |

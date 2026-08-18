@@ -43,7 +43,7 @@ BANNER
 
 check_root() {
     if [ "$(id -u)" -ne 0 ]; then
-        echo -e "${RED}[✗] Error: This script must be run as root (or with sudo).${NC}" >&2
+        echo -e "${RED}[X] Error: This script must be run as root (or with sudo).${NC}" >&2
         exit 1
     fi
 }
@@ -53,7 +53,7 @@ check_os() {
         . /etc/os-release
         OS=$ID
     else
-        echo -e "${RED}[✗] Unsupported Linux distribution. Debian/Ubuntu is required.${NC}" >&2
+        echo -e "${RED}[X] Unsupported Linux distribution. Debian/Ubuntu is required.${NC}" >&2
         exit 1
     fi
 
@@ -106,7 +106,7 @@ bootstrap_environment() {
         echo -e "${CYAN}[*] Installing base dependencies (git, curl, ca-certificates)...${NC}"
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -y
-        apt-get install -y curl git ca-certificates tar iptables ufw sudo
+        apt-get install -y curl git ca-certificates tar iptables sudo
 
         echo -e "${CYAN}[*] Setting up IKE-UI in ${INSTALL_DIR}...${NC}"
         mkdir -p "$(dirname "$INSTALL_DIR")"
@@ -126,9 +126,31 @@ bootstrap_environment() {
         chmod +x "${INSTALL_DIR}/install.sh"
         setup_cli_shortcut
 
-        echo -e "${GREEN}[✓] Initialization complete.${NC}"
+        echo -e "${GREEN}[+] Initialization complete.${NC}"
         echo ""
         exec "${INSTALL_DIR}/install.sh" "$@"
+    fi
+}
+
+apply_firewall() {
+    detect_network
+    iptables -t nat -C POSTROUTING -s 10.10.10.0/24 -o "$NET_IFACE" -j MASQUERADE 2>/dev/null || \
+        iptables -t nat -A POSTROUTING -s 10.10.10.0/24 -o "$NET_IFACE" -j MASQUERADE
+
+    iptables -C FORWARD -s 10.10.10.0/24 -j ACCEPT 2>/dev/null || \
+        iptables -A FORWARD -s 10.10.10.0/24 -j ACCEPT
+
+    iptables -C FORWARD -d 10.10.10.0/24 -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || \
+        iptables -A FORWARD -d 10.10.10.0/24 -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+    iptables -t mangle -C FORWARD -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1360 2>/dev/null || \
+        iptables -t mangle -A FORWARD -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1360
+
+    if command -v ufw >/dev/null 2>&1; then
+        ufw allow 500/udp >/dev/null 2>&1 || true
+        ufw allow 4500/udp >/dev/null 2>&1 || true
+        ufw allow 80/tcp >/dev/null 2>&1 || true
+        ufw allow 443/tcp >/dev/null 2>&1 || true
     fi
 }
 
@@ -147,11 +169,14 @@ install_all() {
     fi
 
     if [ -z "$DOMAIN" ]; then
-        echo -e "${RED}[✗] Error: Domain name cannot be empty.${NC}"
+        echo -e "${RED}[X] Error: Domain name cannot be empty.${NC}"
         exit 1
     fi
 
     echo ""
+    read -rp "Enter Admin Username [default: admin]: " ADMIN_USER
+    ADMIN_USER=${ADMIN_USER:-admin}
+
     read -rp "Enter Admin Password [default: admin123]: " ADMIN_PASS
     ADMIN_PASS=${ADMIN_PASS:-admin123}
 
@@ -167,8 +192,6 @@ install_all() {
         libstrongswan-extra-plugins \
         libstrongswan-standard-plugins \
         certbot \
-        iptables-persistent \
-        netfilter-persistent \
         nginx \
         python3 \
         python3-pip \
@@ -176,7 +199,7 @@ install_all() {
         sqlite3 \
         curl \
         git \
-        ufw
+        iptables
 
     setup_cli_shortcut
 
@@ -184,7 +207,7 @@ install_all() {
     systemctl stop nginx 2>/dev/null || true
 
     if [ -d "/etc/letsencrypt/live/${DOMAIN}" ] && [ -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
-        echo -e "${GREEN}[✓] Existing certificate found for ${DOMAIN}.${NC}"
+        echo -e "${GREEN}[+] Existing certificate found for ${DOMAIN}.${NC}"
     else
         certbot certonly --standalone \
             --agree-tos \
@@ -263,7 +286,7 @@ SEC_EOF
         chmod 600 "${SECRETS_PATH}"
     fi
 
-    echo -e "${CYAN}[5/7] Configuring network, forwarding and TCP MSS...${NC}"
+    echo -e "${CYAN}[5/7] Configuring network, forwarding and firewall rules...${NC}"
     cat > /etc/sysctl.d/99-ikev2-vpn.conf << 'SYSCTL_EOF'
 net.ipv4.ip_forward = 1
 net.ipv4.conf.all.accept_redirects = 0
@@ -271,19 +294,24 @@ net.ipv4.conf.all.send_redirects = 0
 SYSCTL_EOF
     sysctl -p /etc/sysctl.d/99-ikev2-vpn.conf >/dev/null 2>&1 || true
 
-    iptables -t nat -C POSTROUTING -s 10.10.10.0/24 -o "$NET_IFACE" -j MASQUERADE 2>/dev/null || \
-        iptables -t nat -A POSTROUTING -s 10.10.10.0/24 -o "$NET_IFACE" -j MASQUERADE
+    apply_firewall
 
-    iptables -C FORWARD -s 10.10.10.0/24 -j ACCEPT 2>/dev/null || \
-        iptables -A FORWARD -s 10.10.10.0/24 -j ACCEPT
+    cat > /etc/systemd/system/ike-rules.service << 'RULES_EOF'
+[Unit]
+Description=IKE-UI Firewall & NAT Rules
+After=network.target
 
-    iptables -C FORWARD -d 10.10.10.0/24 -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || \
-        iptables -A FORWARD -d 10.10.10.0/24 -m state --state RELATED,ESTABLISHED -j ACCEPT
+[Service]
+Type=oneshot
+ExecStart=/opt/ike-ui/install.sh --apply-firewall
+RemainAfterExit=yes
 
-    iptables -t mangle -C FORWARD -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1360 2>/dev/null || \
-        iptables -t mangle -A FORWARD -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1360
+[Install]
+WantedBy=multi-user.target
+RULES_EOF
 
-    netfilter-persistent save >/dev/null 2>&1 || true
+    systemctl daemon-reload
+    systemctl enable ike-rules.service
 
     echo -e "${CYAN}[6/7] Setting up Python virtual environment & dependencies...${NC}"
     python3 -m venv "${INSTALL_DIR}/venv"
@@ -299,7 +327,12 @@ from werkzeug.security import generate_password_hash
 app.init_db()
 conn = app.get_db()
 cursor = conn.cursor()
-cursor.execute('UPDATE admin SET password_hash = ? WHERE username = ?', (generate_password_hash('${ADMIN_PASS}'), 'admin'))
+cursor.execute('SELECT id FROM admin LIMIT 1')
+row = cursor.fetchone()
+if row:
+    cursor.execute('UPDATE admin SET username = ?, password_hash = ? WHERE id = ?', ('${ADMIN_USER}', generate_password_hash('${ADMIN_PASS}'), row['id']))
+else:
+    cursor.execute('INSERT INTO admin (username, password_hash) VALUES (?, ?)', ('${ADMIN_USER}', generate_password_hash('${ADMIN_PASS}')))
 conn.commit()
 conn.close()
 "
@@ -375,27 +408,27 @@ NGINX_EOF
     systemctl restart nginx.service
 
     show_banner
-    echo -e "${GREEN}${BOLD}════════════════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}${BOLD}       🎉 IKE-UI Server & Panel Successfully Deployed!        ${NC}"
-    echo -e "${GREEN}${BOLD}════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}${BOLD}====================================================================${NC}"
+    echo -e "${GREEN}${BOLD}       IKE-UI Server & Panel Successfully Deployed!        ${NC}"
+    echo -e "${GREEN}${BOLD}====================================================================${NC}"
     echo ""
-    echo -e "  ${BOLD}🌐 Server Domain:${NC}    ${CYAN}https://${DOMAIN}${NC}"
-    echo -e "  ${BOLD}🖥️ Server IP:${NC}        ${YELLOW}${SERVER_IP}${NC}"
-    echo -e "  ${BOLD}🛡️ VPN Protocol:${NC}     ${GREEN}IKEv2 / IPsec (UDP 500 / 4500)${NC}"
+    echo -e "  ${BOLD}Server Domain:${NC}    ${CYAN}https://${DOMAIN}${NC}"
+    echo -e "  ${BOLD}Server IP:${NC}        ${YELLOW}${SERVER_IP}${NC}"
+    echo -e "  ${BOLD}VPN Protocol:${NC}     ${GREEN}IKEv2 / IPsec (UDP 500 / 4500)${NC}"
     echo ""
-    echo -e "  ${BOLD}🔑 Panel Login:${NC}"
+    echo -e "  ${BOLD}Panel Login:${NC}"
     echo -e "     • URL:       ${CYAN}https://${DOMAIN}${NC}"
-    echo -e "     • Username:  ${BOLD}admin${NC}"
+    echo -e "     • Username:  ${BOLD}${ADMIN_USER}${NC}"
     echo -e "     • Password:  ${BOLD}${ADMIN_PASS}${NC}"
     echo ""
-    echo -e "  ${BOLD}👤 Default VPN User:${NC}"
+    echo -e "  ${BOLD}Default VPN User:${NC}"
     echo -e "     • Username:  ${BOLD}mehran${NC}"
     echo -e "     • Password:  ${BOLD}12345678${NC}"
     echo ""
-    echo -e "${CYAN}════════════════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}Zero-Cert Setup: No certificates or profiles needed on clients!${NC}"
+    echo -e "${CYAN}====================================================================${NC}"
+    echo -e "${YELLOW}Zero-Cert Setup: No certificates or profiles needed on clients.${NC}"
     echo -e "Enter Server: ${BOLD}${DOMAIN}${NC}, Username, and Password on iOS, Windows, Android, macOS."
-    echo -e "${CYAN}════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}====================================================================${NC}"
     echo ""
 }
 
@@ -417,7 +450,7 @@ update_ike_ui() {
         git remote set-url origin "$REPO_URL" 2>/dev/null || true
         git fetch --all --tags --prune
         git reset --hard origin/main
-        echo -e "${GREEN}[✓] Git repository updated successfully.${NC}"
+        echo -e "${GREEN}[+] Git repository updated successfully.${NC}"
     else
         echo -e "${YELLOW}[1/4] Initializing Git repository in ${INSTALL_DIR}...${NC}"
         TEMP_CLONE="/tmp/ike-ui-update-temp"
@@ -426,7 +459,7 @@ update_ike_ui() {
         cp -r "$TEMP_CLONE/.git" "$INSTALL_DIR/"
         rm -rf "$TEMP_CLONE"
         git reset --hard origin/main
-        echo -e "${GREEN}[✓] Converted to tracked Git repository.${NC}"
+        echo -e "${GREEN}[+] Converted to tracked Git repository.${NC}"
     fi
 
     chmod +x "${INSTALL_DIR}/install.sh" 2>/dev/null || true
@@ -438,7 +471,7 @@ update_ike_ui() {
     fi
     "${INSTALL_DIR}/venv/bin/pip" install --upgrade pip >/dev/null
     "${INSTALL_DIR}/venv/bin/pip" install -r "${INSTALL_DIR}/panel/requirements.txt" >/dev/null
-    echo -e "${GREEN}[✓] Python dependencies updated.${NC}"
+    echo -e "${GREEN}[+] Python dependencies updated.${NC}"
 
     echo -e "${CYAN}[3/4] Running database migrations...${NC}"
     "${INSTALL_DIR}/venv/bin/python" -c "
@@ -447,7 +480,7 @@ sys.path.insert(0, '${INSTALL_DIR}/panel')
 import app
 app.init_db()
 "
-    echo -e "${GREEN}[✓] Database schema verified and updated.${NC}"
+    echo -e "${GREEN}[+] Database schema verified and updated.${NC}"
 
     echo -e "${CYAN}[4/4] Restarting IKE-UI panel service...${NC}"
     systemctl daemon-reload
@@ -457,16 +490,16 @@ app.init_db()
 
     if systemctl is-active --quiet ike-ui.service; then
         echo ""
-        echo -e "${GREEN}${BOLD}════════════════════════════════════════════════════════════════════${NC}"
-        echo -e "${GREEN}${BOLD}             🎉 IKE-UI Successfully Updated to Latest!            ${NC}"
-        echo -e "${GREEN}${BOLD}════════════════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}${BOLD}====================================================================${NC}"
+        echo -e "${GREEN}${BOLD}             IKE-UI Successfully Updated to Latest!                 ${NC}"
+        echo -e "${GREEN}${BOLD}====================================================================${NC}"
         COMMIT_HASH=$(cd "$INSTALL_DIR" && git log -1 --pretty=format:"%h - %s (%cr)" 2>/dev/null || echo "Latest")
-        echo -e "  ${BOLD}📦 Version:${NC}  ${CYAN}${COMMIT_HASH}${NC}"
-        echo -e "  ${BOLD}🟢 Status:${NC}   ${GREEN}Active & Running${NC}"
-        echo -e "${GREEN}${BOLD}════════════════════════════════════════════════════════════════════${NC}"
+        echo -e "  ${BOLD}Version:${NC}  ${CYAN}${COMMIT_HASH}${NC}"
+        echo -e "  ${BOLD}Status:${NC}   ${GREEN}Active & Running${NC}"
+        echo -e "${GREEN}${BOLD}====================================================================${NC}"
         echo ""
     else
-        echo -e "${RED}[✗] Error: Service failed to start after update. Check logs with 'ike-ui logs'.${NC}"
+        echo -e "${RED}[X] Error: Service failed to start after update. Check logs with 'ike-ui logs'.${NC}"
     fi
 }
 
@@ -475,7 +508,7 @@ start_services() {
     systemctl start strongswan-starter 2>/dev/null || systemctl start strongswan 2>/dev/null || ipsec start 2>/dev/null || true
     systemctl start ike-ui 2>/dev/null || systemctl start ikev2-panel 2>/dev/null || true
     systemctl start nginx
-    echo -e "${GREEN}[✓] All services started.${NC}"
+    echo -e "${GREEN}[+] All services started.${NC}"
 }
 
 stop_services() {
@@ -483,7 +516,7 @@ stop_services() {
     systemctl stop ike-ui 2>/dev/null || systemctl stop ikev2-panel 2>/dev/null || true
     systemctl stop nginx
     systemctl stop strongswan-starter 2>/dev/null || systemctl stop strongswan 2>/dev/null || ipsec stop 2>/dev/null || true
-    echo -e "${GREEN}[✓] All services stopped.${NC}"
+    echo -e "${GREEN}[+] All services stopped.${NC}"
 }
 
 restart_services() {
@@ -491,18 +524,18 @@ restart_services() {
     systemctl restart strongswan-starter 2>/dev/null || systemctl restart strongswan 2>/dev/null || ipsec restart 2>/dev/null || true
     systemctl restart ike-ui 2>/dev/null || systemctl restart ikev2-panel 2>/dev/null || true
     systemctl restart nginx
-    echo -e "${GREEN}[✓] All services restarted successfully.${NC}"
+    echo -e "${GREEN}[+] All services restarted successfully.${NC}"
 }
 
 check_status() {
     show_banner
-    echo -e "${CYAN}=== 🛡️ StrongSwan IPsec VPN Status ===${NC}"
+    echo -e "${CYAN}=== StrongSwan IPsec VPN Status ===${NC}"
     ipsec statusall 2>/dev/null || true
     echo ""
-    echo -e "${CYAN}=== 🌐 IKE-UI Panel Status ===${NC}"
+    echo -e "${CYAN}=== IKE-UI Panel Status ===${NC}"
     systemctl status ike-ui --no-pager -l 2>/dev/null || systemctl status ikev2-panel --no-pager -l 2>/dev/null || true
     echo ""
-    echo -e "${CYAN}=== 🔀 Nginx Web Server Status ===${NC}"
+    echo -e "${CYAN}=== Nginx Web Server Status ===${NC}"
     systemctl status nginx --no-pager -l || true
 }
 
@@ -523,10 +556,13 @@ view_logs() {
     esac
 }
 
-reset_admin_password() {
+reset_admin_credentials() {
+    read -rp "Enter Admin Username [default: admin]: " NEW_USER
+    NEW_USER=${NEW_USER:-admin}
+
     read -rp "Enter new Admin Password: " NEW_PASS
     if [ -z "$NEW_PASS" ]; then
-        echo -e "${RED}[✗] Password cannot be empty.${NC}"
+        echo -e "${RED}[X] Password cannot be empty.${NC}"
         return
     fi
     "${INSTALL_DIR}/venv/bin/python" -c "
@@ -536,22 +572,27 @@ import app
 from werkzeug.security import generate_password_hash
 conn = app.get_db()
 cursor = conn.cursor()
-cursor.execute('UPDATE admin SET password_hash = ? WHERE username = ?', (generate_password_hash('${NEW_PASS}'), 'admin'))
+cursor.execute('SELECT id FROM admin LIMIT 1')
+row = cursor.fetchone()
+if row:
+    cursor.execute('UPDATE admin SET username = ?, password_hash = ? WHERE id = ?', ('${NEW_USER}', generate_password_hash('${NEW_PASS}'), row['id']))
+else:
+    cursor.execute('INSERT INTO admin (username, password_hash) VALUES (?, ?)', ('${NEW_USER}', generate_password_hash('${NEW_PASS}')))
 conn.commit()
 conn.close()
-print('[✓] Admin password updated successfully.')
+print('[+] Admin credentials updated successfully.')
 "
 }
 
 renew_ssl() {
     echo -e "${YELLOW}[*] Testing and renewing Let's Encrypt certificates...${NC}"
     certbot renew --deploy-hook "/etc/letsencrypt/renewal-hooks/deploy/strongswan.sh"
-    echo -e "${GREEN}[✓] SSL renewal completed.${NC}"
+    echo -e "${GREEN}[+] SSL renewal completed.${NC}"
 }
 
 uninstall_all() {
     show_banner
-    echo -e "${RED}${BOLD}⚠️  WARNING: You are about to uninstall IKE-UI!${NC}"
+    echo -e "${RED}${BOLD}[!] WARNING: You are about to uninstall IKE-UI!${NC}"
     echo ""
     read -rp "Are you sure you want to proceed with uninstallation? [y/N]: " confirm
     if [[ ! "$confirm" =~ ^[yY]([eE][sS])?$ ]]; then
@@ -566,6 +607,11 @@ uninstall_all() {
     systemctl stop ike-ui 2>/dev/null || true
     systemctl disable ike-ui 2>/dev/null || true
     rm -f /etc/systemd/system/ike-ui.service /etc/systemd/system/ikev2-panel.service
+
+    systemctl stop ike-rules 2>/dev/null || true
+    systemctl disable ike-rules 2>/dev/null || true
+    rm -f /etc/systemd/system/ike-rules.service
+
     systemctl daemon-reload
 
     rm -f /etc/nginx/sites-enabled/ike-ui /etc/nginx/sites-available/ike-ui
@@ -581,7 +627,7 @@ uninstall_all() {
         echo -e "${GREEN}[*] Database preserved at ${DB_DIR}.${NC}"
     fi
 
-    echo -e "${GREEN}${BOLD}[✓] IKE-UI has been completely uninstalled.${NC}"
+    echo -e "${GREEN}${BOLD}[+] IKE-UI has been completely uninstalled.${NC}"
     exit 0
 }
 
@@ -608,7 +654,7 @@ show_help() {
     echo -e "  ${CYAN}stop${NC}          Stop all services"
     echo -e "  ${CYAN}status, -s${NC}    Check service status and active VPN connections"
     echo -e "  ${CYAN}logs, -l${NC}      View live service logs"
-    echo -e "  ${CYAN}password, -p${NC}  Reset admin web panel password"
+    echo -e "  ${CYAN}password, -p${NC}  Reset admin web panel credentials"
     echo -e "  ${CYAN}ssl${NC}           Renew SSL certificates"
     echo -e "  ${CYAN}uninstall${NC}     Uninstall IKE-UI and clean up"
     echo -e "  ${CYAN}version, -v${NC}   Show current installed version"
@@ -620,17 +666,17 @@ menu() {
     while true; do
         show_banner
         echo -e "${BOLD}Select an action:${NC}"
-        echo -e "  ${CYAN}1)${NC}  🚀 Full Install / Re-deploy"
-        echo -e "  ${CYAN}2)${NC}  🔄 Update IKE-UI (Pull Latest from GitHub)"
-        echo -e "  ${CYAN}3)${NC}  🔁 Restart All Services (StrongSwan, Panel, Nginx)"
-        echo -e "  ${CYAN}4)${NC}  ⏹️  Stop All Services"
-        echo -e "  ${CYAN}5)${NC}  ▶️  Start All Services"
-        echo -e "  ${CYAN}6)${NC}  📊 Check Status & Active VPN Connections"
-        echo -e "  ${CYAN}7)${NC}  📜 View Live Logs"
-        echo -e "  ${CYAN}8)${NC}  🔑 Reset Admin Panel Password"
-        echo -e "  ${CYAN}9)${NC}  🌐 Renew SSL Certificate"
-        echo -e "  ${CYAN}10)${NC} 🗑️  Uninstall IKE-UI"
-        echo -e "  ${CYAN}0)${NC}  ❌ Exit"
+        echo -e "  ${CYAN}1)${NC}  Full Install / Re-deploy"
+        echo -e "  ${CYAN}2)${NC}  Update IKE-UI (Pull Latest from GitHub)"
+        echo -e "  ${CYAN}3)${NC}  Restart All Services (StrongSwan, Panel, Nginx)"
+        echo -e "  ${CYAN}4)${NC}  Stop All Services"
+        echo -e "  ${CYAN}5)${NC}  Start All Services"
+        echo -e "  ${CYAN}6)${NC}  Check Status & Active VPN Connections"
+        echo -e "  ${CYAN}7)${NC}  View Live Logs"
+        echo -e "  ${CYAN}8)${NC}  Reset Admin Panel Credentials"
+        echo -e "  ${CYAN}9)${NC}  Renew SSL Certificate"
+        echo -e "  ${CYAN}10)${NC} Uninstall IKE-UI"
+        echo -e "  ${CYAN}0)${NC}  Exit"
         echo ""
         read -rp "Enter your choice [0-10]: " choice
         case $choice in
@@ -641,7 +687,7 @@ menu() {
             5) start_services; read -rp "Press Enter to continue..." ;;
             6) check_status; read -rp "Press Enter to continue..." ;;
             7) view_logs ;;
-            8) reset_admin_password; read -rp "Press Enter to continue..." ;;
+            8) reset_admin_credentials; read -rp "Press Enter to continue..." ;;
             9) renew_ssl; read -rp "Press Enter to continue..." ;;
             10) uninstall_all ;;
             0) exit 0 ;;
@@ -657,6 +703,10 @@ case "$1" in
         ;;
     help|-h|--help)
         show_help
+        exit 0
+        ;;
+    --apply-firewall)
+        apply_firewall
         exit 0
         ;;
 esac
@@ -688,7 +738,7 @@ case "$1" in
         view_logs
         ;;
     password|-p|--password)
-        reset_admin_password
+        reset_admin_credentials
         ;;
     ssl|--ssl)
         renew_ssl
