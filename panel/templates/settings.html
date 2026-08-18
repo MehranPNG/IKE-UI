@@ -82,11 +82,6 @@
                             {% if vpn_enabled %}Online{% else %}Stopped{% endif %}
                         </span>
                     </div>
-
-                    <div style="margin-top: 1rem; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px; color: var(--accent-yellow);"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                        Note: Disabling the VPN service does <strong>not</strong> stop the web panel. You can manage users and re-enable the VPN anytime.
-                    </div>
                 </div>
             </div>
 
@@ -126,17 +121,19 @@
 
     <!-- Confirm Disable VPN Modal -->
     <div id="confirmVpnModal" class="modal">
-        <div class="modal-content confirm-modal-content">
-            <div class="confirm-icon-danger">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                    <line x1="12" y1="9" x2="12" y2="13"/>
-                    <line x1="12" y1="17" x2="12.01" y2="17"/>
-                </svg>
+        <div class="modal-content" style="max-width: 420px;">
+            <div class="modal-body confirm-text-center" style="padding-top: 2rem; padding-bottom: 1.5rem;">
+                <div class="confirm-icon-box">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                </div>
+                <h4>Disable VPN Service?</h4>
+                <p>This will immediately terminate all active VPN client connections and block any new connections until re-enabled.<br><br>The web management panel will remain accessible.</p>
             </div>
-            <h4>Disable VPN Service?</h4>
-            <p>This will immediately terminate all active VPN client connections and block any new connections until re-enabled.<br><br>The web management panel will remain accessible.</p>
-            <div class="modal-footer" style="justify-content: center; gap: 0.85rem; margin-top: 1.25rem;">
+            <div class="modal-footer" style="justify-content: center; gap: 0.85rem;">
                 <button type="button" class="btn btn-secondary" onclick="cancelVpnToggle()">Cancel</button>
                 <button type="button" class="btn btn-danger" id="btnConfirmDisableVpn" onclick="executeVpnToggle(false)">Disable Service</button>
             </div>
