@@ -54,7 +54,7 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.0.8"
+APP_VERSION = "1.0.9"
 
 app = Flask(
     __name__,
@@ -83,7 +83,8 @@ except Exception:
 def inject_globals():
     return dict(
         app_version=APP_VERSION,
-        current_admin=session.get("admin_user", "")
+        current_admin=session.get("admin_user", ""),
+        vpn_enabled=(get_system_config("vpn_enabled", "1") == "1")
     )
 
 prev_cpu_times = None
@@ -210,10 +211,43 @@ def get_db_usernames():
     except Exception:
         return set()
 
+def get_system_config(key, default="1"):
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM system_config WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        conn.close()
+        if row and row["value"] is not None:
+            return row["value"]
+        return default
+    except Exception:
+        return default
+
+def set_system_config(key, value):
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO system_config (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """, (key, str(value)))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[!] Error setting config {key}: {e}", file=sys.stderr)
+
 def init_db():
     try:
         conn = get_db()
         cursor = conn.cursor()
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS system_config (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+        """)
         
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS admin (
@@ -271,6 +305,19 @@ def init_db():
 
 sync_lock = threading.Lock()
 
+def disconnect_all_sas():
+    """Disconnect all active StrongSwan SAs when VPN is killed."""
+    try:
+        subprocess.run(["ipsec", "down", "ikev2-vpn"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        online = fetch_online_users_raw()
+        for u, data in online.items():
+            for sa_id in data.get("sa_ids", []):
+                if sa_id:
+                    subprocess.run(["ipsec", "down", f"ikev2-vpn[{sa_id}]"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.run(["ipsec", "down", str(sa_id)], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        print(f"[!] Error disconnecting all SAs: {e}", file=sys.stderr)
+
 def disconnect_user_sas(username, online_dict=None):
     """Safely disconnect all active StrongSwan SAs for a specific username."""
     if not username:
@@ -290,6 +337,17 @@ def disconnect_user_sas(username, online_dict=None):
 def sync_ipsec_secrets():
     with sync_lock:
         try:
+            vpn_enabled = (get_system_config("vpn_enabled", "1") == "1")
+            if not vpn_enabled:
+                os.makedirs(os.path.dirname(os.path.abspath(SECRETS_PATH)), exist_ok=True)
+                temp_secrets = f"{SECRETS_PATH}.tmp"
+                with open(temp_secrets, "w") as f:
+                    f.write(": RSA privkey.pem\n")
+                os.chmod(temp_secrets, 0o600)
+                os.replace(temp_secrets, SECRETS_PATH)
+                subprocess.run(["ipsec", "rereadsecrets"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return
+
             conn = get_db()
             cursor = conn.cursor()
             cursor.execute("SELECT username, password, max_traffic_gb, used_traffic_bytes, expire_date, is_active FROM users")
@@ -515,7 +573,12 @@ def accounting_daemon():
     global last_seen_sa_bytes
     while not shutdown_event.is_set():
         try:
+            vpn_enabled = (get_system_config("vpn_enabled", "1") == "1")
             online = fetch_online_users_raw()
+            if not vpn_enabled and online:
+                disconnect_all_sas()
+                online = {}
+
             now = datetime.datetime.now()
             now_str = now.strftime("%Y-%m-%d %H:%M:%S")
             
@@ -826,6 +889,7 @@ def sse_stream():
                         "total_traffic": format_bytes_val(total_traffic_bytes)
                     },
                     "sys": sys_metrics,
+                    "vpn_enabled": (get_system_config("vpn_enabled", "1") == "1"),
                     "users": user_list
                 }
 
@@ -865,6 +929,21 @@ def add_user():
             return jsonify({"success": False, "error": "Username and password are required!"}), 400
         flash("Username and password are required!", "danger")
         return redirect(url_for("dashboard"))
+
+    # Case-insensitive uniqueness check
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM users WHERE LOWER(username) = LOWER(?)", (username,))
+        existing_user = cursor.fetchone()
+        if existing_user:
+            conn.close()
+            if is_ajax:
+                return jsonify({"success": False, "error": f"User '{username}' already exists!"}), 400
+            flash(f"User '{username}' already exists!", "danger")
+            return redirect(url_for("dashboard"))
+    except Exception as e:
+        pass
         
     expire_date = None
     if duration_days > 0:
@@ -1077,13 +1156,28 @@ def delete_user(user_id):
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.accept_mimetypes.best == "application/json"
     if request.method == "POST":
         curr_pass = request.form.get("current_password", "").strip()
         new_pass = request.form.get("new_password", "").strip()
         confirm_pass = request.form.get("confirm_password", "").strip()
         
+        if not curr_pass or not new_pass:
+            if is_ajax:
+                return jsonify({"success": False, "error": "All password fields are required!"}), 400
+            flash("All password fields are required!", "danger")
+            return redirect(url_for("settings"))
+            
         if new_pass != confirm_pass:
+            if is_ajax:
+                return jsonify({"success": False, "error": "New passwords do not match!"}), 400
             flash("New passwords do not match!", "danger")
+            return redirect(url_for("settings"))
+
+        if len(new_pass) < 4:
+            if is_ajax:
+                return jsonify({"success": False, "error": "Password must be at least 4 characters long!"}), 400
+            flash("Password must be at least 4 characters long!", "danger")
             return redirect(url_for("settings"))
             
         conn = get_db()
@@ -1096,13 +1190,40 @@ def settings():
             cursor.execute("UPDATE admin SET password_hash = ? WHERE id = ?", (new_hash, admin["id"]))
             conn.commit()
             conn.close()
+            if is_ajax:
+                return jsonify({"success": True, "message": "Admin password updated successfully!"})
             flash("Admin password updated successfully!", "success")
         else:
             conn.close()
+            if is_ajax:
+                return jsonify({"success": False, "error": "Current password is incorrect!"}), 400
             flash("Current password is incorrect!", "danger")
         return redirect(url_for("settings"))
         
-    return render_template("settings.html")
+    vpn_status = (get_system_config("vpn_enabled", "1") == "1")
+    return render_template("settings.html", vpn_enabled=vpn_status)
+
+@app.route("/settings/toggle-vpn", methods=["POST"])
+@login_required
+def toggle_vpn_service():
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.accept_mimetypes.best == "application/json"
+    current_status = (get_system_config("vpn_enabled", "1") == "1")
+    new_status = not current_status
+    set_system_config("vpn_enabled", "1" if new_status else "0")
+    sync_ipsec_secrets()
+    if not new_status:
+        disconnect_all_sas()
+        
+    status_text = "enabled" if new_status else "disabled (Maintenance Mode)"
+    msg = f"VPN Service is now {status_text}."
+    if is_ajax:
+        return jsonify({
+            "success": True,
+            "vpn_enabled": new_status,
+            "message": msg
+        })
+    flash(msg, "success" if new_status else "warning")
+    return redirect(url_for("settings"))
 
 @app.route("/admin/add", methods=["POST"])
 @login_required

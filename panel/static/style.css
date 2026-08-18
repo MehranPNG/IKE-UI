@@ -119,6 +119,42 @@ body.modal-open {
     vertical-align: middle;
 }
 
+.service-stopped-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: var(--font-heading);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.18rem 0.55rem;
+    background: rgba(255, 71, 87, 0.15);
+    color: var(--danger);
+    border: 1.5px solid var(--danger);
+    border-radius: var(--radius-sm);
+    box-shadow: 1.5px 1.5px 0px #000000;
+    cursor: pointer;
+    line-height: 1;
+    transition: all 0.12s ease;
+    user-select: none;
+    animation: alertPulse 2.2s infinite ease-in-out;
+}
+
+.service-stopped-badge:hover {
+    background: rgba(255, 71, 87, 0.25);
+    transform: translate(-1px, -1px);
+    box-shadow: 2px 2px 0px #000000;
+}
+
+.service-stopped-badge:active {
+    transform: translate(1px, 1px);
+    box-shadow: none;
+}
+
+@keyframes alertPulse {
+    0%, 100% { opacity: 1; border-color: var(--danger); }
+    50% { opacity: 0.7; border-color: #ff8591; }
+}
+
 .nav-actions {
     display: flex;
     align-items: center;
