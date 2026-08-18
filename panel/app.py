@@ -955,19 +955,13 @@ def settings():
             cursor.execute("UPDATE admin SET password_hash = ? WHERE id = ?", (new_hash, admin["id"]))
             conn.commit()
             conn.close()
-            flash("Password updated successfully!", "success")
+            flash("Admin password updated successfully!", "success")
         else:
             conn.close()
             flash("Current password is incorrect!", "danger")
         return redirect(url_for("settings"))
         
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, username, created_at FROM admin ORDER BY id ASC")
-    admins = [dict(a) for a in cursor.fetchall()]
-    conn.close()
-    
-    return render_template("settings.html", admins=admins)
+    return render_template("settings.html")
 
 @app.route("/admin/add", methods=["POST"])
 @login_required

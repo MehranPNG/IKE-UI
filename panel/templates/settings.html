@@ -44,7 +44,7 @@
             </div>
         </header>
 
-        <main class="main-content" style="max-width: 680px; margin: 2rem auto;">
+        <main class="main-content" style="max-width: 580px; margin: 2.5rem auto;">
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
@@ -53,95 +53,10 @@
                 {% endif %}
             {% endwith %}
 
-            <!-- Admin Accounts Management Card -->
-            <div class="card settings-card" style="margin-bottom: 2rem;">
-                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <h2>Administrators</h2>
-                        <p>Manage administrator accounts and panel access</p>
-                    </div>
-                    <button type="button" class="btn btn-primary btn-sm" onclick="openAddAdminModal()" style="display: inline-flex; align-items: center; gap: 0.35rem;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <line x1="12" y1="5" x2="12" y2="19"/>
-                            <line x1="5" y1="12" x2="19" y2="12"/>
-                        </svg>
-                        Add Admin
-                    </button>
-                </div>
-                <div class="card-body" style="padding-top: 0.5rem;">
-                    <div class="table-responsive">
-                        <table class="user-table" style="margin-top: 0.5rem;">
-                            <thead>
-                                <tr>
-                                    <th>Admin Username</th>
-                                    <th>Created</th>
-                                    <th class="text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for a in admins %}
-                                <tr>
-                                    <td>
-                                        <div class="user-cell">
-                                            <div class="user-avatar" style="background: rgba(99, 102, 241, 0.15); color: #818cf8;">
-                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                                    <circle cx="12" cy="7" r="4"/>
-                                                </svg>
-                                            </div>
-                                            <div class="user-info">
-                                                <div class="username-row">
-                                                    <span class="user-name">{{ a.username }}</span>
-                                                    {% if a.username == current_admin %}
-                                                    <span class="status-pill status-active" style="font-size: 0.65rem; padding: 2px 7px;">Current Session</span>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="sub-text" style="font-size: 0.8rem;">{{ a.created_at[:10] if a.created_at else "Default" }}</span>
-                                    </td>
-                                    <td class="text-right">
-                                        <div class="action-buttons" style="justify-content: flex-end;">
-                                            <button type="button" class="btn-icon" onclick="openEditAdminModal('{{ a.id }}', '{{ a.username }}')" title="Change Password">
-                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                                                </svg>
-                                            </button>
-                                            {% if admins|length > 1 %}
-                                            <form method="POST" action="{{ url_for('delete_admin', admin_id=a.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete administrator {{ a.username }}?');">
-                                                <button type="submit" class="btn-icon text-danger" title="Delete Admin">
-                                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                        <polyline points="3 6 5 6 21 6"/>
-                                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                                                    </svg>
-                                                </button>
-                                            </form>
-                                            {% else %}
-                                            <button type="button" class="btn-icon" disabled style="opacity: 0.3; cursor: not-allowed;" title="Cannot delete sole admin">
-                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <polyline points="3 6 5 6 21 6"/>
-                                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                                                </svg>
-                                            </button>
-                                            {% endif %}
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Change Current Admin Password Card -->
             <div class="card settings-card">
                 <div class="card-header">
-                    <h2>Change Your Password</h2>
-                    <p>Update password for currently active session ({{ current_admin }})</p>
+                    <h2>Change Admin Password</h2>
+                    <p>Update credentials for panel security</p>
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('settings') }}">
@@ -164,121 +79,7 @@
         </main>
     </div>
 
-    <!-- Add Admin Modal -->
-    <div id="addAdminModal" class="modal">
-        <div class="modal-content" style="max-width: 440px;">
-            <div class="modal-header">
-                <h3>Add New Administrator</h3>
-                <button type="button" class="btn-close" onclick="closeAddAdminModal()">&times;</button>
-            </div>
-            <form method="POST" action="{{ url_for('add_admin') }}">
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label>Username</label>
-                        <input type="text" name="username" placeholder="e.g. admin2" required autofocus>
-                    </div>
-                    <div class="form-group">
-                        <label>Password</label>
-                        <input type="password" name="password" placeholder="••••••••" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Confirm Password</label>
-                        <input type="password" name="confirm_password" placeholder="••••••••" required>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="closeAddAdminModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Create Admin</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Edit Admin Password Modal -->
-    <div id="editAdminModal" class="modal">
-        <div class="modal-content" style="max-width: 440px;">
-            <div class="modal-header">
-                <h3>Change Admin Password</h3>
-                <button type="button" class="btn-close" onclick="closeEditAdminModal()">&times;</button>
-            </div>
-            <form id="editAdminForm" method="POST" action="">
-                <div class="modal-body">
-                    <p style="margin-bottom: 1rem; color: var(--text-muted); font-size: 0.9rem;">
-                        Setting new password for administrator: <strong id="editAdminUsernameDisplay" style="color: var(--text-primary);"></strong>
-                    </p>
-                    <div class="form-group">
-                        <label>New Password</label>
-                        <input type="password" name="new_password" placeholder="••••••••" required autofocus>
-                    </div>
-                    <div class="form-group">
-                        <label>Confirm New Password</label>
-                        <input type="password" name="confirm_password" placeholder="••••••••" required>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="closeEditAdminModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Password</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <script>
-        function openAddAdminModal() {
-            const modal = document.getElementById('addAdminModal');
-            if (modal) {
-                modal.classList.add('show');
-                document.body.classList.add('modal-open');
-                const input = modal.querySelector('input[name="username"]');
-                if (input) setTimeout(() => input.focus(), 50);
-            }
-        }
-
-        function closeAddAdminModal() {
-            const modal = document.getElementById('addAdminModal');
-            if (modal) {
-                modal.classList.remove('show');
-                document.body.classList.remove('modal-open');
-            }
-        }
-
-        function openEditAdminModal(adminId, username) {
-            const modal = document.getElementById('editAdminModal');
-            const form = document.getElementById('editAdminForm');
-            const userDisplay = document.getElementById('editAdminUsernameDisplay');
-            if (modal && form) {
-                form.action = '/admin/edit-password/' + adminId;
-                if (userDisplay) userDisplay.textContent = username;
-                modal.classList.add('show');
-                document.body.classList.add('modal-open');
-                const input = modal.querySelector('input[name="new_password"]');
-                if (input) setTimeout(() => input.focus(), 50);
-            }
-        }
-
-        function closeEditAdminModal() {
-            const modal = document.getElementById('editAdminModal');
-            if (modal) {
-                modal.classList.remove('show');
-                document.body.classList.remove('modal-open');
-            }
-        }
-
-        // Close on background click or Escape
-        window.addEventListener('click', function(e) {
-            if (e.target.classList.contains('modal')) {
-                closeAddAdminModal();
-                closeEditAdminModal();
-            }
-        });
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeAddAdminModal();
-                closeEditAdminModal();
-            }
-        });
-
         function fetchGitHubStars() {
             const starEl = document.getElementById('ghStarsCount');
             if (!starEl) return;
