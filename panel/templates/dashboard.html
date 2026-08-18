@@ -716,10 +716,6 @@
                                 <span class="stat-val" id="infoSessionTrafficVal">↓ 0 B / ↑ 0 B</span>
                             </div>
                             <div class="session-stat-item">
-                                <span class="stat-lbl">Tunnel VIP</span>
-                                <span class="stat-val stat-mono" id="infoLiveVipVal">--</span>
-                            </div>
-                            <div class="session-stat-item">
                                 <span class="stat-lbl">Uptime</span>
                                 <span class="stat-val" id="infoLiveDurationVal">--</span>
                             </div>
@@ -1090,13 +1086,11 @@
                     const rxEl = document.getElementById('infoNetRxVal');
                     const txEl = document.getElementById('infoNetTxVal');
                     const sessEl = document.getElementById('infoSessionTrafficVal');
-                    const vipEl = document.getElementById('infoLiveVipVal');
                     const durEl = document.getElementById('infoLiveDurationVal');
 
                     if (rxEl) rxEl.innerText = '↓ ' + (u.live_net.net_rx || '0 B/s');
                     if (txEl) txEl.innerText = '↑ ' + (u.live_net.net_tx || '0 B/s');
                     if (sessEl) sessEl.innerText = '↓ ' + (u.live_net.bytes_in || '0 B') + ' / ↑ ' + (u.live_net.bytes_out || '0 B');
-                    if (vipEl) vipEl.innerText = u.live_net.vip || '--';
                     if (durEl) durEl.innerText = u.live_net.established || 'Active';
                 } else {
                     liveNetCard.style.display = 'none';
