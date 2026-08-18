@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
-# ==============================================================================
-#  IKE-UI All-in-One Installer & Management CLI
-#  Repo: https://github.com/MehranPNG/IKE-UI
-# ==============================================================================
-
 REPO_URL="https://github.com/MehranPNG/IKE-UI.git"
-APP_VERSION="1.0.5"
+APP_VERSION="1.0.6"
 INSTALL_DIR="/opt/ike-ui"
 PANEL_DIR="${INSTALL_DIR}/panel"
 DB_DIR="/etc/strongswan-panel"
@@ -36,7 +31,7 @@ show_banner() {
   ██║██╔═██╗ ██╔══╝  ╚════╝██║   ██║██║
   ██║██║  ██╗███████╗      ╚██████╔╝██║
   ╚═╝╚═╝  ╚═╝╚══════╝       ╚═════╝ ╚═╝
-              IKE-UI Manager v${APP_VERSION}
+         IKE-UI Manager v${APP_VERSION}
 BANNER
     echo -e "${CYAN}====================================================${NC}"
     echo -e "${NC}"

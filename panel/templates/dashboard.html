@@ -282,12 +282,12 @@
                                             </svg>
                                         </button>
 
-                                        <a href="{{ url_for('delete_user', user_id=u.id) }}" class="btn-icon text-danger" onclick="return confirm('Are you sure you want to delete user {{ u.username }}?')" title="Delete User">
+                                        <button type="button" class="btn-icon text-danger" onclick="confirmDeleteUser('{{ u.id }}', '{{ u.username }}')" title="Delete User">
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                 <polyline points="3 6 5 6 21 6"/>
                                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                                             </svg>
-                                        </a>
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -311,11 +311,11 @@
                     <h3>Add New User</h3>
                     <button class="btn-close" onclick="closeAddModal()">&times;</button>
                 </div>
-                <form id="addUserForm" onsubmit="submitAddUser(event)">
+                <form id="addUserForm" novalidate onsubmit="submitAddUser(event)">
                     <div class="modal-body">
                         <div class="form-group">
                             <label>Username</label>
-                            <input type="text" id="addUsername" name="username" placeholder="e.g. john" required autofocus>
+                            <input type="text" id="addUsername" name="username" placeholder="e.g. john" autofocus autocomplete="off">
                         </div>
                         <div class="form-group">
                             <div class="label-row">
@@ -325,7 +325,7 @@
                                     Generate
                                 </button>
                             </div>
-                            <input type="text" id="addPassword" name="password" placeholder="e.g. SecretPassword123" required>
+                            <input type="text" id="addPassword" name="password" placeholder="e.g. SecretPassword123" autocomplete="off">
                         </div>
                         <div class="form-row">
                             <div class="form-group col">
@@ -437,7 +437,7 @@
                     <h3>Edit User: <span id="editModalUsername"></span></h3>
                     <button class="btn-close" onclick="closeEditModal()">&times;</button>
                 </div>
-                <form id="editUserForm" onsubmit="submitEditUser(event)">
+                <form id="editUserForm" novalidate onsubmit="submitEditUser(event)">
                     <div class="modal-body">
                         <div class="toggle-card">
                             <div class="toggle-header" onclick="clickToggleHeader()">
@@ -562,7 +562,151 @@
         </div>
     </div>
 
+    <!-- Custom Confirmation Modal -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content" style="max-width: 420px;">
+            <div class="modal-body confirm-text-center" style="padding-top: 2rem; padding-bottom: 1.5rem;">
+                <div class="confirm-icon-box">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        <line x1="10" y1="11" x2="10" y2="17"/>
+                        <line x1="14" y1="11" x2="14" y2="17"/>
+                    </svg>
+                </div>
+                <h4 id="confirmModalTitle">Delete User</h4>
+                <p id="confirmModalMessage">Are you sure you want to delete this user? This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer" style="justify-content: center; gap: 0.85rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeConfirmModal()">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmModalBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
     <script>
+        // Custom Toast System
+        function showToast(message, type = 'error', duration = 3500) {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+
+            let iconSvg = '';
+            if (type === 'success') {
+                iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`;
+            } else if (type === 'warning') {
+                iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+            } else if (type === 'info') {
+                iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+            } else {
+                iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+            }
+
+            toast.innerHTML = `
+                <div class="toast-icon">${iconSvg}</div>
+                <div class="toast-content">${message}</div>
+                <button type="button" class="toast-close" onclick="dismissToast(this.parentElement)">&times;</button>
+            `;
+
+            container.appendChild(toast);
+
+            const timer = setTimeout(() => {
+                dismissToast(toast);
+            }, duration);
+
+            toast._timer = timer;
+        }
+
+        function dismissToast(toast) {
+            if (!toast || toast.classList.contains('hiding')) return;
+            if (toast._timer) clearTimeout(toast._timer);
+            toast.classList.add('hiding');
+            setTimeout(() => {
+                if (toast.parentElement) toast.parentElement.removeChild(toast);
+            }, 200);
+        }
+
+        // Custom Confirmation Modal System
+        let onConfirmCallback = null;
+        function openConfirmModal(title, message, confirmBtnText, onConfirm) {
+            document.getElementById('confirmModalTitle').innerText = title || 'Confirm Action';
+            document.getElementById('confirmModalMessage').innerHTML = message || 'Are you sure?';
+            const btn = document.getElementById('confirmModalBtn');
+            btn.innerText = confirmBtnText || 'Confirm';
+            onConfirmCallback = onConfirm;
+
+            document.getElementById('confirmModal').style.display = 'flex';
+            document.body.classList.add('modal-open');
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirmModal').style.display = 'none';
+            if (document.getElementById('addModal').style.display !== 'flex' &&
+                document.getElementById('editModal').style.display !== 'flex') {
+                document.body.classList.remove('modal-open');
+            }
+            onConfirmCallback = null;
+        }
+
+        document.getElementById('confirmModalBtn').addEventListener('click', () => {
+            if (typeof onConfirmCallback === 'function') {
+                const cb = onConfirmCallback;
+                closeConfirmModal();
+                cb();
+            } else {
+                closeConfirmModal();
+            }
+        });
+
+        function confirmDeleteUser(userId, username) {
+            openConfirmModal(
+                'Delete User',
+                `Are you sure you want to delete user <strong>${username}</strong>?<br><span style="color: var(--text-muted); font-size: 0.8rem; margin-top: 4px; display: inline-block;">This action cannot be undone.</span>`,
+                'Delete User',
+                () => {
+                    window.location.href = `/user/delete/${userId}`;
+                }
+            );
+        }
+
+        // Custom Field Validation System
+        function showFieldError(input, msg) {
+            if (!input) return;
+            input.classList.add('input-error');
+            const parent = input.closest('.form-group') || input.parentElement;
+            let errEl = parent.querySelector('.field-error');
+            if (!errEl) {
+                errEl = document.createElement('div');
+                errEl.className = 'field-error';
+                parent.appendChild(errEl);
+            }
+            errEl.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> <span>${msg}</span>`;
+        }
+
+        function clearFieldError(input) {
+            if (!input) return;
+            input.classList.remove('input-error');
+            const parent = input.closest('.form-group') || input.parentElement;
+            const errEl = parent.querySelector('.field-error');
+            if (errEl) errEl.remove();
+        }
+
+        function clearAllErrors(formSelector) {
+            const form = document.querySelector(formSelector);
+            if (!form) return;
+            form.querySelectorAll('.input-error').forEach(el => el.classList.remove('input-error'));
+            form.querySelectorAll('.field-error').forEach(el => el.remove());
+        }
+
+        document.querySelectorAll('#addUserForm input, #editUserForm input').forEach(input => {
+            input.addEventListener('input', () => clearFieldError(input));
+        });
+
         function generateRandomPassword(targetInputId) {
             const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
             let res = '';
@@ -571,7 +715,9 @@
             for (let i = 0; i < 10; i++) {
                 res += chars[array[i] % chars.length];
             }
-            document.getElementById(targetInputId).value = res;
+            const input = document.getElementById(targetInputId);
+            input.value = res;
+            clearFieldError(input);
         }
 
         function stepNumberInput(inputId, delta, step = 1) {
@@ -596,12 +742,16 @@
             if (isChecked && !document.getElementById('editPassword').value) {
                 generateRandomPassword('editPassword');
             }
+            if (!isChecked) {
+                clearFieldError(document.getElementById('editPassword'));
+            }
         }
 
         function openAddModal() {
             document.getElementById('addFormView').style.display = 'block';
             document.getElementById('addSuccessView').style.display = 'none';
             document.getElementById('addUserForm').reset();
+            clearAllErrors('#addUserForm');
             generateRandomPassword('addPassword');
             document.getElementById('addModal').style.display = 'flex';
             document.body.classList.add('modal-open');
@@ -609,6 +759,7 @@
         function closeAddModal() {
             document.getElementById('addModal').style.display = 'none';
             document.body.classList.remove('modal-open');
+            clearAllErrors('#addUserForm');
         }
 
         let currentEditUserId = null;
@@ -621,7 +772,8 @@
             document.getElementById('editMaxTraffic').value = (maxTraffic && parseFloat(maxTraffic) > 0) ? maxTraffic : '';
             document.getElementById('editDurationDays').value = (remainingDays !== '' && remainingDays !== null) ? remainingDays : '';
             document.getElementById('editNote').value = note;
-            
+            clearAllErrors('#editUserForm');
+
             document.getElementById('editFormView').style.display = 'block';
             document.getElementById('editSuccessView').style.display = 'none';
             document.getElementById('editModal').style.display = 'flex';
@@ -630,11 +782,13 @@
         function closeEditModal() {
             document.getElementById('editModal').style.display = 'none';
             document.body.classList.remove('modal-open');
+            clearAllErrors('#editUserForm');
         }
 
         window.onclick = function(event) {
             if (event.target == document.getElementById('addModal')) closeAddModal();
             if (event.target == document.getElementById('editModal')) closeEditModal();
+            if (event.target == document.getElementById('confirmModal')) closeConfirmModal();
         }
 
         function copyFieldValue(elementId, btn) {
@@ -658,6 +812,34 @@
         let lastCreatedPayload = null;
         async function submitAddUser(e) {
             e.preventDefault();
+
+            // Custom client-side validation
+            const uInput = document.getElementById('addUsername');
+            const pInput = document.getElementById('addPassword');
+            let valid = true;
+
+            clearFieldError(uInput);
+            clearFieldError(pInput);
+
+            if (!uInput.value.trim()) {
+                showFieldError(uInput, 'Username is required');
+                valid = false;
+            } else if (!/^[a-zA-Z0-9_-]+$/.test(uInput.value.trim())) {
+                showFieldError(uInput, 'Letters, numbers, dash and underscore only');
+                valid = false;
+            }
+
+            if (!pInput.value.trim()) {
+                showFieldError(pInput, 'Password is required');
+                valid = false;
+            }
+
+            if (!valid) {
+                const firstErr = document.querySelector('#addUserForm .input-error');
+                if (firstErr) firstErr.focus();
+                return;
+            }
+
             const btn = document.getElementById('btnAddSubmit');
             btn.disabled = true;
             btn.innerText = 'Creating...';
@@ -724,11 +906,12 @@
 
                     document.getElementById('addFormView').style.display = 'none';
                     document.getElementById('addSuccessView').style.display = 'block';
+                    showToast('User created successfully!', 'success');
                 } else {
-                    alert(res.error || 'Failed to create user');
+                    showToast(res.error || 'Failed to create user', 'error');
                 }
             } catch (err) {
-                alert('Connection error occurred while creating user.');
+                showToast('Connection error occurred while creating user.', 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerText = 'Create User';
@@ -739,6 +922,16 @@
         async function submitEditUser(e) {
             e.preventDefault();
             if (!currentEditUserId) return;
+
+            const isChangingPwd = document.getElementById('toggleChangePassword').checked;
+            const pInput = document.getElementById('editPassword');
+            clearFieldError(pInput);
+
+            if (isChangingPwd && !pInput.value.trim()) {
+                showFieldError(pInput, 'Please enter new password');
+                pInput.focus();
+                return;
+            }
 
             const btn = document.getElementById('btnEditSubmit');
             btn.disabled = true;
@@ -807,14 +1000,16 @@
 
                         document.getElementById('editFormView').style.display = 'none';
                         document.getElementById('editSuccessView').style.display = 'block';
+                        showToast('Password updated successfully!', 'success');
                     } else {
                         closeEditModal();
+                        showToast('User updated successfully!', 'success');
                     }
                 } else {
-                    alert(res.error || 'Failed to update user');
+                    showToast(res.error || 'Failed to update user', 'error');
                 }
             } catch (err) {
-                alert('Connection error occurred while updating user.');
+                showToast('Connection error occurred while updating user.', 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerText = 'Save Changes';
@@ -927,12 +1122,12 @@
                                 <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
                             </svg>
                         </button>
-                        <a href="/user/delete/${u.id}" class="btn-icon text-danger" onclick="return confirm('Are you sure you want to delete user ${u.username}?')" title="Delete User">
+                        <button type="button" class="btn-icon text-danger" onclick="confirmDeleteUser('${u.id}', '${u.username}')" title="Delete User">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="3 6 5 6 21 6"/>
                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                             </svg>
-                        </a>
+                        </button>
                     </div>
                 </td>
             `;

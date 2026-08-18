@@ -12,7 +12,8 @@
 <body class="login-body">
     <div class="login-card">
         <div class="login-header">
-            <h2 style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">IKE-UI <span class="brand-badge">v{{ app_version }}</span></h2>
+            <h2>IKE-UI</h2>
+            <div class="login-version"><span class="brand-badge">v{{ app_version }}</span></div>
             <p>Enter administrator credentials to access the panel</p>
         </div>
 
@@ -24,17 +25,69 @@
             {% endif %}
         {% endwith %}
 
-        <form method="POST" action="{{ url_for('login') }}" class="login-form">
+        <form method="POST" action="{{ url_for('login') }}" class="login-form" id="loginForm" novalidate onsubmit="return validateLoginForm(event)">
             <div class="form-group">
                 <label for="username">Username</label>
-                <input type="text" id="username" name="username" placeholder="admin" required autofocus>
+                <input type="text" id="username" name="username" placeholder="admin" autofocus autocomplete="username">
             </div>
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" placeholder="••••••••" required>
+                <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password">
             </div>
             <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1.5rem;">Sign In</button>
         </form>
     </div>
+
+    <script>
+        function validateLoginForm(e) {
+            let valid = true;
+            const uInput = document.getElementById('username');
+            const pInput = document.getElementById('password');
+
+            clearFieldError(uInput);
+            clearFieldError(pInput);
+
+            if (!uInput.value.trim()) {
+                showFieldError(uInput, 'Username is required');
+                valid = false;
+            }
+
+            if (!pInput.value) {
+                showFieldError(pInput, 'Password is required');
+                valid = false;
+            }
+
+            if (!valid) {
+                e.preventDefault();
+                const firstErr = document.querySelector('.input-error');
+                if (firstErr) firstErr.focus();
+                return false;
+            }
+            return true;
+        }
+
+        function showFieldError(input, msg) {
+            input.classList.add('input-error');
+            const parent = input.closest('.form-group') || input.parentElement;
+            let errEl = parent.querySelector('.field-error');
+            if (!errEl) {
+                errEl = document.createElement('div');
+                errEl.className = 'field-error';
+                parent.appendChild(errEl);
+            }
+            errEl.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> <span>${msg}</span>`;
+        }
+
+        function clearFieldError(input) {
+            input.classList.remove('input-error');
+            const parent = input.closest('.form-group') || input.parentElement;
+            const errEl = parent.querySelector('.field-error');
+            if (errEl) errEl.remove();
+        }
+
+        document.querySelectorAll('#loginForm input').forEach(input => {
+            input.addEventListener('input', () => clearFieldError(input));
+        });
+    </script>
 </body>
 </html>
