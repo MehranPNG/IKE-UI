@@ -1,6 +1,8 @@
-# IKE-UI
+IKE-UI
 
-> **All-in-One IKEv2/IPsec VPN Server & Web Management Panel**
+Web management panel for an IKEv2/IPsec VPN server.
+
+IKE-UI uses StrongSwan for the VPN service and Nginx for the web panel and TLS termination. It includes an installation script that configures the required services and can obtain a Let's Encrypt certificate for the VPN domain.
 
 <p align="left">
   <img src="https://img.shields.io/badge/Release-v1.0.5-7452ff?style=flat-square" alt="Version 1.0.5" />
@@ -8,107 +10,102 @@
   <img src="https://img.shields.io/badge/SSL-Let's%20Encrypt%20Auto-brightgreen?style=flat-square" alt="Let's Encrypt" />
   <img src="https://img.shields.io/badge/OS-Ubuntu%20%2F%20Debian-orange?style=flat-square" alt="Ubuntu / Debian" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License" />
-</p>
+</p>Features
 
-**IKE-UI** is a lightweight, zero-configuration **IKEv2/IPsec VPN Server** with automated **Let's Encrypt SSL** and a real-time **Web Management Panel**.
+- IKEv2/IPsec VPN using StrongSwan
+- Web-based server management
+- Let's Encrypt certificate setup
+- Nginx configuration
+- User management
+- Service status and logs
+- SSL certificate management
+- Panel update support
+- "ike-ui" command-line manager
 
-It requires **NO client-side certificates or configuration profiles**. Clients connect natively on **iOS, Android, Windows, and macOS** using only Server Domain, Username, and Password.
+Clients can connect using the native IKEv2 support available on iOS, Android, Windows, and macOS. The default setup does not require a client-side certificate.
 
----
+Requirements
 
-## Prerequisites
+Before installation, make sure the server meets the following requirements:
 
-Before installing, make sure you have:
+- Ubuntu 20.04, 22.04, or 24.04
+- Debian 11 or 12
+- Root or "sudo" access
+- A domain or subdomain pointing to the server
+- The following ports available:
 
-1. **Linux Server**: Ubuntu 20.04 / 22.04 / 24.04 or Debian 11 / 12 with `root` or `sudo` access.
-2. **Domain / Subdomain**: A domain (e.g. `vpn.example.com`) with an **DNS `A` Record** pointing to your server's public IP address.
-3. **Open Ports**: Ensure the following ports are open on your firewall / cloud provider:
-   - `UDP 500` & `UDP 4500` (IKEv2 / IPsec VPN)
-   - `TCP 80` & `TCP 443` (SSL Certificate & Web Panel)
+Port| Protocol| Purpose
+500| UDP| IKE
+4500| UDP| IPsec NAT-T
+80| TCP| Let's Encrypt
+443| TCP| Web panel
 
----
+The domain must have an "A" record pointing to the server's public IP address.
 
-## Quick Install
+Installation
 
-Run this command on your server to start the interactive installation:
+Run the installation script:
 
-```bash
 bash <(curl -Ls https://raw.githubusercontent.com/MehranPNG/IKE-UI/main/install.sh)
-```
 
-The script will automatically install dependencies, issue Let's Encrypt SSL, configure StrongSwan & Nginx, set up the web panel, and create the global `ike-ui` command.
+The installer will configure the required packages and services, including:
 
----
+- StrongSwan
+- Nginx
+- Let's Encrypt
+- IKE-UI
+- The "ike-ui" command
 
-## Server Management (`ike-ui`)
+The installer will prompt for the required configuration during setup.
 
-Once installed, you can manage your server anytime by simply running:
+Server Management
 
-```bash
+After installation, run:
+
 ike-ui
-```
 
-This opens the interactive manager for checking status, restarting services, viewing live logs, managing SSL, or updating the panel.
+This opens the management interface for common server operations.
 
-### Command Shortcuts
+You can use it to:
 
-You can also run subcommands directly:
+- Check service status
+- Restart services
+- View logs
+- Manage SSL certificates
+- Update IKE-UI
+- Manage VPN users
 
-| Command | Description |
-| :--- | :--- |
-| `ike-ui` | Open interactive management menu |
-| `ike-ui status` / `-s` | Check service status and active VPN connections |
-| `ike-ui update` / `-u` | Update IKE-UI to the latest version |
-| `ike-ui restart` / `-r` | Restart StrongSwan, Panel, and Nginx |
-| `ike-ui logs` / `-l` | View live service logs |
-| `ike-ui password` / `-p` | Reset web panel admin credentials |
-| `ike-ui ssl` | Renew Let's Encrypt SSL certificates |
-| `ike-ui start` / `stop` | Start or stop all services |
-| `ike-ui uninstall` | Completely uninstall IKE-UI |
+Client Configuration
 
----
+IKE-UI uses standard IKEv2/IPsec authentication.
 
-## Updates
+Depending on the client platform, the connection can be configured with:
 
-To update IKE-UI to the latest release on GitHub without losing any user accounts or database settings:
+- Server address
+- Username
+- Password
 
-```bash
-ike-ui update
-```
+No custom client application is required.
 
----
+Supported Systems
 
-## Client Connection Guides
+Server
 
-### iOS / iPadOS
-1. **Settings** > **VPN & Device Management** > **Add VPN Configuration...**
-2. **Type**: `IKEv2`
-3. **Server** & **Remote ID**: `your-domain.com`
-4. **User Authentication**: `Username`
-5. Enter **Username** & **Password**.
+- Ubuntu 20.04
+- Ubuntu 22.04
+- Ubuntu 24.04
+- Debian 11
+- Debian 12
 
-### Windows 10 & 11
-1. **Settings** > **Network & Internet** > **VPN** > **Add a VPN connection**
-2. **VPN provider**: `Windows (built-in)`
-3. **Server name or address**: `your-domain.com`
-4. **VPN type**: `IKEv2`
-5. **Type of sign-in info**: `User name and password`
-6. Enter **Username** & **Password**.
+Clients
 
-### Android
-1. **Settings** > **Connections / VPN** > **Add VPN (+)**
-2. **Type**: `IKEv2/IPSec MSCHAPv2`
-3. **Server address** & **IPSec identifier**: `your-domain.com`
-4. **CA certificate**: `(Unspecified)` or `Select automatically`
-5. Enter **Username** & **Password**.
+IKEv2 is supported by most modern operating systems, including:
 
-### macOS
-1. **System Settings** > **Network** > **VPN** > **Add VPN Configuration** > **IKEv2**
-2. **Server Address** & **Remote ID**: `your-domain.com`
-3. **Authentication**: `Username`
-4. Enter **Username** & **Password**.
+- iOS
+- Android
+- Windows
+- macOS
 
----
+License
 
-## License
-This project is licensed under the [MIT License](LICENSE).
+IKE-UI is released under the MIT License. See "LICENSE" (LICENSE) for details.
