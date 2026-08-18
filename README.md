@@ -1,4 +1,4 @@
-# 🛡️ IKE-UI
+# IKE-UI
 
 > **All-in-One IKEv2/IPsec VPN Server & Web Management Panel**
 
@@ -16,7 +16,7 @@ It requires **NO client-side certificates or configuration profiles**. Clients c
 
 ---
 
-## 📋 Prerequisites
+## Prerequisites
 
 Before installing, make sure you have:
 
@@ -28,7 +28,7 @@ Before installing, make sure you have:
 
 ---
 
-## 🚀 Quick Install
+## Quick Install
 
 Run this command on your server to start the interactive installation:
 
@@ -40,7 +40,7 @@ The script will automatically install dependencies, issue Let's Encrypt SSL, con
 
 ---
 
-## ⚡ Server Management (`ike-ui`)
+## Server Management (`ike-ui`)
 
 Once installed, you can manage your server anytime by simply running:
 
@@ -50,7 +50,7 @@ ike-ui
 
 This opens the interactive manager for checking status, restarting services, viewing live logs, managing SSL, or updating the panel.
 
-### 🛠️ Command Shortcuts
+### Command Shortcuts
 
 You can also run subcommands directly:
 
@@ -68,7 +68,7 @@ You can also run subcommands directly:
 
 ---
 
-## 🔄 Updates
+## Updates
 
 To update IKE-UI to the latest release on GitHub without losing any user accounts or database settings:
 
@@ -78,37 +78,37 @@ ike-ui update
 
 ---
 
-## 📱 Client Connection Guides
+## Client Connection Guides
 
-### 🍏 iOS / iPadOS
-1. **Settings** ➡️ **VPN & Device Management** ➡️ **Add VPN Configuration...**
+### iOS / iPadOS
+1. **Settings** > **VPN & Device Management** > **Add VPN Configuration...**
 2. **Type**: `IKEv2`
 3. **Server** & **Remote ID**: `your-domain.com`
 4. **User Authentication**: `Username`
 5. Enter **Username** & **Password**.
 
-### 💻 Windows 10 & 11
-1. **Settings** ➡️ **Network & Internet** ➡️ **VPN** ➡️ **Add a VPN connection**
+### Windows 10 & 11
+1. **Settings** > **Network & Internet** > **VPN** > **Add a VPN connection**
 2. **VPN provider**: `Windows (built-in)`
 3. **Server name or address**: `your-domain.com`
 4. **VPN type**: `IKEv2`
 5. **Type of sign-in info**: `User name and password`
 6. Enter **Username** & **Password**.
 
-### 🤖 Android
-1. **Settings** ➡️ **Connections / VPN** ➡️ **Add VPN (+)**
+### Android
+1. **Settings** > **Connections / VPN** > **Add VPN (+)**
 2. **Type**: `IKEv2/IPSec MSCHAPv2`
 3. **Server address** & **IPSec identifier**: `your-domain.com`
 4. **CA certificate**: `(Unspecified)` or `Select automatically`
 5. Enter **Username** & **Password**.
 
-### 🍎 macOS
-1. **System Settings** ➡️ **Network** ➡️ **VPN** ➡️ **Add VPN Configuration** ➡️ **IKEv2**
+### macOS
+1. **System Settings** > **Network** > **VPN** > **Add VPN Configuration** > **IKEv2**
 2. **Server Address** & **Remote ID**: `your-domain.com`
 3. **Authentication**: `Username`
 4. Enter **Username** & **Password**.
 
 ---
 
-## 📄 License
+## License
 This project is licensed under the [MIT License](LICENSE).
