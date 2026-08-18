@@ -39,7 +39,7 @@ def get_persistent_secret_key():
         print(f"[!] Warning: Could not save secret.key: {e}", file=sys.stderr)
     return new_key
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 
 app = Flask(
     __name__,
@@ -612,6 +612,8 @@ def sse_stream():
                 }
 
                 yield f"data: {json.dumps(payload)}\n\n"
+            except GeneratorExit:
+                break
             except Exception as e:
                 print(f"[!] Error in SSE generator: {e}", file=sys.stderr)
                 

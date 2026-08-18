@@ -7,7 +7,7 @@ set -e
 # ==============================================================================
 
 REPO_URL="https://github.com/MehranPNG/IKE-UI.git"
-APP_VERSION="1.0.0"
+APP_VERSION="1.0.1"
 INSTALL_DIR="/opt/ike-ui"
 PANEL_DIR="${INSTALL_DIR}/panel"
 DB_DIR="/etc/strongswan-panel"
@@ -351,7 +351,7 @@ Environment="SERVER_DOMAIN=${DOMAIN}"
 Environment="DB_PATH=${DB_PATH}"
 Environment="SECRETS_PATH=${SECRETS_PATH}"
 Environment="SECRET_KEY_PATH=${SECRET_KEY_PATH}"
-ExecStart=${INSTALL_DIR}/venv/bin/gunicorn -w 1 -b 127.0.0.1:8000 app:app
+ExecStart=${INSTALL_DIR}/venv/bin/gunicorn --workers 2 --threads 8 --worker-class gthread --worker-connections 1000 -b 127.0.0.1:8000 app:app
 Restart=always
 RestartSec=3
 
@@ -484,6 +484,9 @@ app.init_db()
     echo -e "${GREEN}[+] Database schema verified and updated.${NC}"
 
     echo -e "${CYAN}[4/4] Restarting IKE-UI panel service...${NC}"
+    if [ -f /etc/systemd/system/ike-ui.service ]; then
+        sed -i 's|gunicorn -w [0-9]\+|gunicorn --workers 2 --threads 8 --worker-class gthread --worker-connections 1000|g' /etc/systemd/system/ike-ui.service
+    fi
     systemctl daemon-reload
     systemctl restart ike-ui.service
 

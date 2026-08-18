@@ -141,14 +141,14 @@ body {
 .btn-github {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.5rem;
     background: #1a1d2d;
     color: #ffffff;
     border: var(--border-width) solid var(--border-dark);
     border-radius: var(--radius-md);
-    padding: 0.35rem 0.65rem;
+    padding: 0.4rem 0.75rem;
     font-family: var(--font-heading);
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     font-weight: 700;
     text-decoration: none;
     box-shadow: var(--shadow-xs);
@@ -171,20 +171,16 @@ body {
 .github-stars {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    background: rgba(0, 0, 0, 0.35);
-    padding: 0.15rem 0.4rem;
-    border-radius: var(--radius-sm);
+    gap: 0.3rem;
     font-family: var(--font-mono);
-    font-size: 0.72rem;
+    font-size: 0.82rem;
     font-weight: 700;
-    color: #ffd000;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #ffffff;
 }
 
 .star-icon {
-    fill: #ffd000;
-    color: #ffd000;
+    fill: #ffffff;
+    color: #ffffff;
 }
 
 .btn {
