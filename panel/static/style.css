@@ -84,6 +84,12 @@ body {
     z-index: 100;
 }
 
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
 .brand-title {
     font-family: var(--font-heading);
     font-size: 1.5rem;
@@ -91,6 +97,23 @@ body {
     letter-spacing: -0.03em;
     color: #ffffff;
     line-height: 1;
+}
+
+.brand-badge {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.2rem 0.5rem;
+    background: var(--primary);
+    color: #ffffff;
+    border: 1.5px solid var(--border-dark);
+    border-radius: var(--radius-sm);
+    box-shadow: 1.5px 1.5px 0px #000000;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    vertical-align: middle;
 }
 
 .nav-actions {

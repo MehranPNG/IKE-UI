@@ -1,6 +1,7 @@
 # 🛡️ IKE-UI — All-in-One IKEv2/IPsec VPN Server & Web Panel
 
 <p align="center">
+  <img src="https://img.shields.io/badge/Release-v1.0.0-7452ff?style=for-the-badge" alt="Version 1.0.0" />
   <img src="https://img.shields.io/badge/VPN-IKEv2%20%2F%20IPsec-blue?style=for-the-badge&logo=wireguard" alt="IKEv2 VPN" />
   <img src="https://img.shields.io/badge/SSL-Let's%20Encrypt%20Auto-brightgreen?style=for-the-badge&logo=letsencrypt" alt="Let's Encrypt" />
   <img src="https://img.shields.io/badge/UI-Neo--Brutalist%20Panel-ff5c5c?style=for-the-badge" alt="Neo-Brutalist Web Panel" />
@@ -18,7 +19,7 @@ It requires **ZERO client-side certificates or configuration profiles**. Users c
 
 ## 🚀 Quick Install (One-Line Command)
 
-Run this command as `root` (or with `sudo`) on an Ubuntu/Debian server:
+Run this command as `root` (or with `sudo`) on a clean Ubuntu/Debian server:
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/MehranPNG/IKE-UI/main/install.sh)
@@ -29,6 +30,43 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/MehranPNG/IKE-UI/main/in
 ```
 
 The script automatically installs dependencies, secures an SSL certificate from Let's Encrypt, configures StrongSwan & Nginx, sets up the web panel service, and binds the global `ike-ui` CLI command to your system.
+
+---
+
+## ⚡ Server Management via `ike-ui` Command
+
+Once installed, you can manage, monitor, and configure your VPN server anytime by typing `ike-ui` in your terminal:
+
+```bash
+ike-ui
+```
+
+Running `ike-ui` opens the interactive manager where you can:
+- View live VPN connection statuses and active clients.
+- Start, stop, or restart all services (StrongSwan, Panel, Nginx).
+- View live logs in real time.
+- Reset the web panel admin username and password.
+- Renew SSL certificates or reconfigure domain settings.
+- Perform seamless one-click updates.
+
+### 🛠️ Direct CLI Subcommands
+
+You can also run subcommands directly from anywhere without opening the menu:
+
+| Command | Description |
+| :--- | :--- |
+| `ike-ui` | Open interactive management menu |
+| `ike-ui install [domain]` | Run automated full deployment |
+| `ike-ui update` / `ike-ui -u` | Update IKE-UI to latest release |
+| `ike-ui restart` / `ike-ui -r` | Restart StrongSwan, Panel, and Nginx |
+| `ike-ui start` | Start all services |
+| `ike-ui stop` | Stop all services |
+| `ike-ui status` / `ike-ui -s` | Show service status & active VPN sessions (`ipsec statusall`) |
+| `ike-ui logs` / `ike-ui -l` | View live panel and VPN logs |
+| `ike-ui password` / `ike-ui -p` | Reset admin web panel credentials |
+| `ike-ui ssl` | Manually renew Let's Encrypt SSL certificates |
+| `ike-ui uninstall` | Completely uninstall IKE-UI |
+| `ike-ui version` / `ike-ui -v` | Show installed version & commit hash |
 
 ---
 
@@ -45,29 +83,6 @@ ike-ui update
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/MehranPNG/IKE-UI/main/install.sh) update
 ```
-
----
-
-## ⚡ Management CLI (`ike-ui`)
-
-After installation, simply type `ike-ui` anywhere in your terminal to open the interactive manager or execute subcommands directly.
-
-### 🛠️ CLI Commands & Subcommands
-
-| Command | Description |
-| :--- | :--- |
-| `ike-ui` | Open interactive management menu |
-| `ike-ui install [domain]` | Run automated full deployment |
-| `ike-ui update` / `ike-ui -u` | Update IKE-UI to latest release |
-| `ike-ui restart` / `ike-ui -r` | Restart StrongSwan, Panel, and Nginx |
-| `ike-ui start` | Start all services |
-| `ike-ui stop` | Stop all services |
-| `ike-ui status` / `ike-ui -s` | Show service status & active VPN sessions (`ipsec statusall`) |
-| `ike-ui logs` / `ike-ui -l` | View live panel and VPN logs |
-| `ike-ui password` / `ike-ui -p` | Reset admin web panel credentials |
-| `ike-ui ssl` | Manually renew Let's Encrypt SSL certificates |
-| `ike-ui uninstall` | Completely uninstall IKE-UI |
-| `ike-ui version` / `ike-ui -v` | Show installed version & commit hash |
 
 ---
 

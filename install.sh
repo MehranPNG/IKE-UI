@@ -7,6 +7,7 @@ set -e
 # ==============================================================================
 
 REPO_URL="https://github.com/MehranPNG/IKE-UI.git"
+APP_VERSION="1.0.0"
 INSTALL_DIR="/opt/ike-ui"
 PANEL_DIR="${INSTALL_DIR}/panel"
 DB_DIR="/etc/strongswan-panel"
@@ -28,14 +29,14 @@ NC='\033[0m'
 show_banner() {
     clear 2>/dev/null || true
     echo -e "${PURPLE}${BOLD}"
-    cat << "BANNER"
+    cat << BANNER
   ██╗██╗  ██╗███████╗      ██╗   ██╗██╗
   ██║██║ ██╔╝██╔════╝      ██║   ██║██║
   ██║█████╔╝ █████╗  █████╗██║   ██║██║
   ██║██╔═██╗ ██╔══╝  ╚════╝██║   ██║██║
   ██║██║  ██╗███████╗      ╚██████╔╝██║
   ╚═╝╚═╝  ╚═╝╚══════╝       ╚═════╝ ╚═╝
-              IKE-UI Manager
+              IKE-UI Manager v${APP_VERSION}
 BANNER
     echo -e "${CYAN}====================================================${NC}"
     echo -e "${NC}"
@@ -633,10 +634,10 @@ uninstall_all() {
 
 show_version() {
     if [ -d "$INSTALL_DIR/.git" ]; then
-        COMMIT=$(cd "$INSTALL_DIR" && git log -1 --pretty=format:"%h - %s (%ci)" 2>/dev/null || echo "Unknown")
-        echo -e "${CYAN}IKE-UI Version:${NC} ${COMMIT}"
+        COMMIT=$(cd "$INSTALL_DIR" && git log -1 --pretty=format:"%h (%ci)" 2>/dev/null || echo "git")
+        echo -e "${CYAN}IKE-UI Version:${NC} ${BOLD}v${APP_VERSION}${NC} (${COMMIT})"
     else
-        echo -e "${CYAN}IKE-UI Version:${NC} 1.0.0"
+        echo -e "${CYAN}IKE-UI Version:${NC} ${BOLD}v${APP_VERSION}${NC}"
     fi
 }
 

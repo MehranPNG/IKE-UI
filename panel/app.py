@@ -39,6 +39,8 @@ def get_persistent_secret_key():
         print(f"[!] Warning: Could not save secret.key: {e}", file=sys.stderr)
     return new_key
 
+APP_VERSION = "1.0.0"
+
 app = Flask(
     __name__,
     template_folder=os.path.join(BASE_DIR, "templates"),
@@ -49,6 +51,10 @@ app.secret_key = get_persistent_secret_key()
 app.config["PERMANENT_SESSION_LIFETIME"] = datetime.timedelta(days=30)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+@app.context_processor
+def inject_globals():
+    return dict(app_version=APP_VERSION)
 
 prev_cpu_times = None
 prev_net_bytes = None
