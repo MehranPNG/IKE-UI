@@ -1,58 +1,100 @@
 # IKE-UI
 
-An all-in-one IKEv2/IPsec VPN server management tool with an integrated web panel and automated SSL certificate handling.
+> IKEv2/IPsec VPN Server & Web Management Panel
 
-![Release](https://img.shields.io/github/v/release/MehranPNG/IKE-UI?style=flat-square)
-![License](https://img.shields.io/github/license/MehranPNG/IKE-UI?style=flat-square)
+<p align="left">  
+  <img src="https://img.shields.io/badge/Release-v1.0.5-7452ff?style=flat-square" alt="Version 1.0.5" />  
+  <img src="https://img.shields.io/badge/VPN-IKEv2%20%2F%20IPsec-blue?style=flat-square" alt="IKEv2 VPN" />  
+  <img src="https://img.shields.io/badge/SSL-Let's%20Encrypt%20Auto-brightgreen?style=flat-square" alt="Let's Encrypt" />  
+  <img src="https://img.shields.io/badge/OS-Ubuntu%20%2F%20Debian-orange?style=flat-square" alt="Ubuntu / Debian" />  
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License" />  
+</p>
 
-IKE-UI simplifies the setup and maintenance of an IKEv2/IPsec VPN server on Debian-based systems. It uses standard EAP-MSCHAPv2 authentication, allowing clients to connect using native OS network settings without requiring custom apps, client-side certificates, or profiles.
+IKE-UI is an IKEv2/IPsec VPN server management script with automated Let's Encrypt SSL provisioning and a web-based administration panel.
 
----
-
-## Prerequisites
-
-Ensure your system meets the following requirements before installation:
-
-* **Operating System:** Ubuntu (20.04, 22.04, 24.04) or Debian (11, 12) with root/sudo privileges.
-* **Domain Name:** A valid domain or subdomain (e.g., `vpn.example.com`) pointed to your server's public IP address (DNS A Record).
-* **Firewall Ports:**
-  * `500/UDP` & `4500/UDP` (IKEv2 / IPsec)
-  * `80/TCP` & `443/TCP` (Let's Encrypt SSL & Web Panel)
+It utilizes EAP-MSCHAPv2 authentication, allowing native client connections on iOS, Android, Windows, and macOS using only the Server Domain, Username, and Password, without requiring client certificates or configuration profiles.
 
 ---
 
-## Installation
+### Prerequisites
 
-Run the installation script to start the setup process:
+Before installing, ensure the system meets the following requirements:
+
+1. **Linux Server:** Ubuntu 20.04 / 22.04 / 24.04 or Debian 11 / 12 with root or sudo access.
+
+2. **Domain / Subdomain:** A domain (e.g., `vpn.example.com`) with a DNS A record pointing to the server's public IP address.
+
+3. **Open Ports:** Ensure the following ports are open on your firewall / cloud provider:
+   - `UDP 500` & `UDP 4500` (IKEv2 / IPsec VPN)
+   - `TCP 80` & `TCP 443` (SSL Certificate & Web Panel)
+
+---
+
+### Quick Install
+
+Run this command on your server to start the installation process:
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/MehranPNG/IKE-UI/main/install.sh)
 ```
 
-The script automates the following tasks:
-* Installing required dependencies (StrongSwan, Nginx, Certbot, etc.)
-* Obtaining and configuring Let's Encrypt SSL certificates
-* Setting up the IPsec service and web panel
-* Adding the `ike-ui` CLI utility for system management
+The script installs dependencies, provisions a Let's Encrypt SSL certificate, configures StrongSwan and Nginx, deploys the web panel, and configures the `ike-ui` command.
 
 ---
 
-## Usage & Management
+### Server Management
 
-You can manage the VPN server and web panel using the interactive CLI tool:
+After installation, manage the server by running:
 
 ```bash
 ike-ui
 ```
 
-### Direct CLI Commands
+This opens the management interface for checking status, restarting services, viewing system logs, managing SSL certificates, or updating the panel.
 
-The tool also supports quick management subcommands:
+#### Command Shortcuts
+
+Subcommands can also be executed directly:
 
 ```bash
 ike-ui status    # Check service status
-ike-ui restart   # Restart all services
-ike-ui logs      # View live system logs
+ike-ui restart   # Restart services
+ike-ui logs      # View system logs
 ike-ui ssl       # Manage or renew SSL certificates
-ike-ui update    # Update IKE-UI to the latest version
+ike-ui update    # Update IKE-UI
 ```
+
+---
+
+### Client Connection Guide
+
+Since IKE-UI uses standard IKEv2/IPsec with EAP-MSCHAPv2, clients can connect using native operating system settings without installing third-party applications.
+
+#### iOS / macOS
+1. Go to **Settings** > **General** > **VPN & Device Management** > **VPN**.
+2. Tap **Add VPN Configuration...**
+3. Select Type: **IKEv2**.
+4. Fill in the fields:
+   - **Server:** Your server domain (e.g., `vpn.example.com`)
+   - **Remote ID:** Your server domain (e.g., `vpn.example.com`)
+   - **User Authentication:** Username
+   - **Username & Password:** Your credentials created via IKE-UI panel
+5. Save and connect.
+
+#### Android
+1. Go to **Settings** > **Network & Internet** > **VPN**.
+2. Tap **+** to add a new VPN profile.
+3. Select Type: **IKEv2/IPsec MSCHAPv2**.
+4. Fill in:
+   - **Server address:** Your server domain
+   - **IPsec identifier:** Your server domain
+   - **Username & Password:** Your account credentials
+5. Save and connect.
+
+#### Windows 10 / 11
+1. Go to **Settings** > **Network & internet** > **VPN**.
+2. Click **Add VPN**.
+3. Set VPN provider to **Windows (built-in)**.
+4. Set VPN type to **IKEv2**.
+5. Set Type of sign-in info to **User name and password**.
+6. Enter your Server name/address and user credentials, then save.
