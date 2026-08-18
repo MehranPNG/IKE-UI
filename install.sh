@@ -23,6 +23,15 @@ NC='\033[0m'
 
 show_banner() {
     clear 2>/dev/null || true
+    local cur_ver="$APP_VERSION"
+    if [ -f "${INSTALL_DIR}/install.sh" ]; then
+        local disk_ver
+        disk_ver=$(grep -oP '^APP_VERSION=["\x27]?\K[^"\x27\s]+' "${INSTALL_DIR}/install.sh" 2>/dev/null || true)
+        if [ -n "$disk_ver" ]; then
+            cur_ver="$disk_ver"
+            APP_VERSION="$disk_ver"
+        fi
+    fi
     echo -e "${PURPLE}${BOLD}"
     cat << BANNER
   ██╗██╗  ██╗███████╗      ██╗   ██╗██╗
@@ -31,7 +40,7 @@ show_banner() {
   ██║██╔═██╗ ██╔══╝  ╚════╝██║   ██║██║
   ██║██║  ██╗███████╗      ╚██████╔╝██║
   ╚═╝╚═╝  ╚═╝╚══════╝       ╚═════╝ ╚═╝
-         IKE-UI Manager v${APP_VERSION}
+         IKE-UI Manager v${cur_ver}
 BANNER
     echo -e "${CYAN}====================================================${NC}"
     
@@ -517,13 +526,26 @@ app.init_db()
 
     sleep 1
 
+    # Read newly pulled version
+    local new_ver=""
+    if [ -f "${INSTALL_DIR}/install.sh" ]; then
+        new_ver=$(grep -oP '^APP_VERSION=["\x27]?\K[^"\x27\s]+' "${INSTALL_DIR}/install.sh" 2>/dev/null || true)
+    fi
+    if [ -z "$new_ver" ] && [ -f "${INSTALL_DIR}/panel/app.py" ]; then
+        new_ver=$(grep -oP '^APP_VERSION\s*=\s*["\x27]?\K[^"\x27\s]+' "${INSTALL_DIR}/panel/app.py" 2>/dev/null || true)
+    fi
+    if [ -n "$new_ver" ]; then
+        APP_VERSION="$new_ver"
+    fi
+
     if systemctl is-active --quiet ike-ui.service; then
         echo ""
         echo -e "${GREEN}${BOLD}====================================================================${NC}"
-        echo -e "${GREEN}${BOLD}             IKE-UI Successfully Updated to Latest!                 ${NC}"
+        echo -e "${GREEN}${BOLD}       IKE-UI Successfully Updated to Version v${APP_VERSION}!      ${NC}"
         echo -e "${GREEN}${BOLD}====================================================================${NC}"
-        COMMIT_HASH=$(cd "$INSTALL_DIR" && git log -1 --pretty=format:"%h - %s (%cr)" 2>/dev/null || echo "Latest")
-        echo -e "  ${BOLD}Version:${NC}  ${CYAN}${COMMIT_HASH}${NC}"
+        local commit_info
+        commit_info=$(cd "$INSTALL_DIR" && git log -1 --pretty=format:"%h - %s (%cr)" 2>/dev/null || echo "Latest")
+        echo -e "  ${BOLD}Version:${NC}  ${GREEN}${BOLD}v${APP_VERSION}${NC} (${CYAN}${commit_info}${NC})"
         echo -e "  ${BOLD}Status:${NC}   ${GREEN}Active & Running${NC}"
         echo -e "${GREEN}${BOLD}====================================================================${NC}"
         echo ""
@@ -680,11 +702,19 @@ uninstall_all() {
 }
 
 show_version() {
+    local cur_ver="$APP_VERSION"
+    if [ -f "${INSTALL_DIR}/install.sh" ]; then
+        local disk_ver
+        disk_ver=$(grep -oP '^APP_VERSION=["\x27]?\K[^"\x27\s]+' "${INSTALL_DIR}/install.sh" 2>/dev/null || true)
+        if [ -n "$disk_ver" ]; then
+            cur_ver="$disk_ver"
+        fi
+    fi
     if [ -d "$INSTALL_DIR/.git" ]; then
         COMMIT=$(cd "$INSTALL_DIR" && git log -1 --pretty=format:"%h (%ci)" 2>/dev/null || echo "git")
-        echo -e "${CYAN}IKE-UI Version:${NC} ${BOLD}v${APP_VERSION}${NC} (${COMMIT})"
+        echo -e "${CYAN}IKE-UI Version:${NC} ${BOLD}v${cur_ver}${NC} (${COMMIT})"
     else
-        echo -e "${CYAN}IKE-UI Version:${NC} ${BOLD}v${APP_VERSION}${NC}"
+        echo -e "${CYAN}IKE-UI Version:${NC} ${BOLD}v${cur_ver}${NC}"
     fi
 }
 
@@ -729,7 +759,16 @@ menu() {
         read -rp "Enter your choice [0-10]: " choice
         case $choice in
             1) install_all; break ;;
-            2) update_ike_ui; read -rp "Press Enter to continue..." ;;
+            2) 
+                update_ike_ui
+                echo ""
+                read -rp "Press Enter to return to menu..."
+                if [ -x "${INSTALL_DIR}/install.sh" ]; then
+                    exec "${INSTALL_DIR}/install.sh"
+                elif [ -f "${INSTALL_DIR}/install.sh" ]; then
+                    exec bash "${INSTALL_DIR}/install.sh"
+                fi
+                ;;
             3) restart_services; read -rp "Press Enter to continue..." ;;
             4) stop_services; read -rp "Press Enter to continue..." ;;
             5) start_services; read -rp "Press Enter to continue..." ;;
