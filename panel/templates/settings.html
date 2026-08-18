@@ -60,9 +60,9 @@
                         <h2>VPN Service Control</h2>
                         <p>Global kill switch to block or allow all VPN connections</p>
                     </div>
-                    <label class="switch-toggle" style="width: 46px; height: 26px;">
-                        <input type="checkbox" id="vpnStatusToggle" {% if vpn_enabled %}checked{% endif %} onchange="toggleVpnService(this)">
-                        <span class="switch-slider" style="border-radius: 26px;"></span>
+                    <label class="switch-toggle-lg">
+                        <input type="checkbox" id="vpnStatusToggle" {% if vpn_enabled %}checked{% endif %} onchange="onVpnToggleChange(this)">
+                        <span class="switch-slider"></span>
                     </label>
                 </div>
                 <div class="card-body">
@@ -90,26 +90,31 @@
                 </div>
             </div>
 
-            <!-- Administrator Account Card -->
+            <!-- Admin Security & Credentials Card -->
             <div class="card settings-card">
                 <div class="card-header">
-                    <h2>Administrator Account</h2>
-                    <p>Security and authentication credentials</p>
+                    <h2>Admin Security & Credentials</h2>
+                    <p>Manage panel access password and credentials</p>
                 </div>
                 <div class="card-body">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; padding: 1rem 1.15rem; background: #0f111a; border: 1.5px solid var(--border-dark); border-radius: var(--radius-md); box-shadow: var(--shadow-xs);">
-                        <div style="display: flex; align-items: center; gap: 0.85rem;">
-                            <div class="user-avatar" style="background: var(--primary);">AD</div>
-                            <div>
-                                <div style="font-family: var(--font-heading); font-size: 1rem; font-weight: 700; color: #ffffff;">{{ current_admin }}</div>
-                                <div style="font-size: 0.78rem; color: var(--text-muted);">Super Administrator</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem; padding: 1.2rem 1.35rem; background: #0f111a; border: 1.5px solid var(--border-dark); border-radius: var(--radius-md); box-shadow: var(--shadow-xs);">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--primary);">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                </svg>
+                                <span style="font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700; color: #ffffff;">Panel Administrator</span>
+                                <span style="font-family: var(--font-mono); font-size: 0.78rem; background: #1a1d2e; color: var(--primary); padding: 2px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-dark);">{{ current_admin }}</span>
+                            </div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">
+                                Update the password used to authenticate into this management panel.
                             </div>
                         </div>
 
                         <button type="button" class="btn btn-primary" onclick="openPasswordModal()">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                <path d="M21 2l-2 2m-1.5 1.5L10 13l-4 4v4h4l4-4 7.5-7.5M16 5l3 3"/>
                             </svg>
                             Change Password
                         </button>
@@ -117,6 +122,25 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Confirm Disable VPN Modal -->
+    <div id="confirmVpnModal" class="modal">
+        <div class="modal-content confirm-modal-content">
+            <div class="confirm-icon-danger">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+            </div>
+            <h4>Disable VPN Service?</h4>
+            <p>This will immediately terminate all active VPN client connections and block any new connections until re-enabled.<br><br>The web management panel will remain accessible.</p>
+            <div class="modal-footer" style="justify-content: center; gap: 0.85rem; margin-top: 1.25rem;">
+                <button type="button" class="btn btn-secondary" onclick="cancelVpnToggle()">Cancel</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmDisableVpn" onclick="executeVpnToggle(false)">Disable Service</button>
+            </div>
+        </div>
     </div>
 
     <!-- Change Password Modal -->
@@ -194,10 +218,36 @@
             }, 200);
         }
 
-        // Toggle VPN Service
-        async function toggleVpnService(checkbox) {
-            const desiredState = checkbox.checked;
-            checkbox.disabled = true;
+        // Toggle VPN Service Flow with 2-Step Confirmation
+        function onVpnToggleChange(checkbox) {
+            if (!checkbox.checked) {
+                // User is attempting to turn OFF -> Revert switch state immediately & show confirmation modal
+                checkbox.checked = true;
+                openConfirmVpnModal();
+            } else {
+                // User is turning ON -> Proceed directly
+                executeVpnToggle(true);
+            }
+        }
+
+        function openConfirmVpnModal() {
+            document.getElementById('confirmVpnModal').style.display = 'flex';
+            document.body.classList.add('modal-open');
+        }
+
+        function cancelVpnToggle() {
+            document.getElementById('confirmVpnModal').style.display = 'none';
+            document.body.classList.remove('modal-open');
+            const toggle = document.getElementById('vpnStatusToggle');
+            if (toggle) toggle.checked = true;
+        }
+
+        async function executeVpnToggle(targetState) {
+            document.getElementById('confirmVpnModal').style.display = 'none';
+            document.body.classList.remove('modal-open');
+
+            const toggle = document.getElementById('vpnStatusToggle');
+            if (toggle) toggle.disabled = true;
 
             try {
                 const response = await fetch('/settings/toggle-vpn', {
@@ -210,18 +260,18 @@
                 const res = await response.json();
 
                 if (res.success) {
-                    checkbox.checked = res.vpn_enabled;
+                    if (toggle) toggle.checked = res.vpn_enabled;
                     updateVpnUI(res.vpn_enabled);
                     showToast(res.message, res.vpn_enabled ? 'success' : 'warning', 3000);
                 } else {
                     throw new Error(res.error || 'Failed to toggle VPN service');
                 }
             } catch (err) {
-                checkbox.checked = !desiredState;
-                updateVpnUI(!desiredState);
+                if (toggle) toggle.checked = !targetState;
+                updateVpnUI(!targetState);
                 showToast(err.message || 'Connection error with server.', 'error');
             } finally {
-                checkbox.disabled = false;
+                if (toggle) toggle.disabled = false;
             }
         }
 
@@ -259,6 +309,7 @@
 
         window.onclick = function(event) {
             if (event.target == document.getElementById('passwordModal')) closePasswordModal();
+            if (event.target == document.getElementById('confirmVpnModal')) cancelVpnToggle();
         }
 
         // Form Validation & Submit

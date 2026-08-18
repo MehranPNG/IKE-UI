@@ -54,7 +54,7 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.0.9"
+APP_VERSION = "1.0.10"
 
 app = Flask(
     __name__,
