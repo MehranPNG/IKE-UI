@@ -315,6 +315,14 @@
                                             <span class="switch-slider"></span>
                                         </label>
 
+                                        <button type="button" class="btn-icon btn-info-user" id="user-info-btn-{{ u.id }}" onclick="openUserInfoModal('{{ u.id }}')" title="User Details & Live Network">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <circle cx="12" cy="12" r="10"/>
+                                                <line x1="12" y1="16" x2="12" y2="12"/>
+                                                <line x1="12" y1="8" x2="12.01" y2="8"/>
+                                            </svg>
+                                        </button>
+
                                         <button class="btn-icon btn-edit-user" id="user-edit-btn-{{ u.id }}" onclick="openEditModal('{{ u.id }}', '{{ u.username }}', '{{ u.max_traffic_gb or '' }}', '{{ u.expire_date | get_remaining_days }}', '{{ u.note or '' }}', '{{ u.max_devices or 10 }}')" title="Edit User">
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                 <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
@@ -658,6 +666,157 @@
         </div>
     </div>
 
+    <!-- User Info & Live Network Modal -->
+    <div id="userInfoModal" class="modal">
+        <div class="modal-content info-modal-content" style="max-width: 520px;">
+            <div class="modal-header">
+                <div class="info-modal-title-wrap">
+                    <div class="info-user-avatar">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 id="infoModalUsername">User Details</h3>
+                        <span class="sub-text" id="infoModalSubtext">Account & Connection Overview</span>
+                    </div>
+                </div>
+                <button class="btn-close" onclick="closeUserInfoModal()">&times;</button>
+            </div>
+            
+            <div class="modal-body info-modal-body">
+                <!-- Live Network Card (Shown ONLY when user is Online) -->
+                <div id="infoUserLiveNetCard" class="user-live-net-card" style="display: none;">
+                    <div class="live-net-header">
+                        <div class="live-net-title">
+                            <span class="badge-pulse"></span>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                            </svg>
+                            <span>Live Network</span>
+                        </div>
+                        <span class="badge badge-online">● Online Session</span>
+                    </div>
+                    
+                    <div class="live-net-body">
+                        <div class="live-net-speed-row">
+                            <div class="speed-box speed-down">
+                                <span class="speed-label">Download Speed</span>
+                                <span class="speed-value" id="infoNetRxVal">↓ 0 B/s</span>
+                            </div>
+                            <div class="speed-box speed-up">
+                                <span class="speed-label">Upload Speed</span>
+                                <span class="speed-value" id="infoNetTxVal">↑ 0 B/s</span>
+                            </div>
+                        </div>
+                        <div class="live-session-stats">
+                            <div class="session-stat-item">
+                                <span class="stat-lbl">Session Usage</span>
+                                <span class="stat-val" id="infoSessionTrafficVal">↓ 0 B / ↑ 0 B</span>
+                            </div>
+                            <div class="session-stat-item">
+                                <span class="stat-lbl">Assigned VIP</span>
+                                <span class="stat-val stat-mono" id="infoLiveVipVal">--</span>
+                            </div>
+                            <div class="session-stat-item">
+                                <span class="stat-lbl">Session Uptime</span>
+                                <span class="stat-val" id="infoLiveDurationVal">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Last Connected Device Card (Shown ONLY if device info exists) -->
+                <div id="infoUserDeviceCard" class="user-device-card" style="display: none;">
+                    <div class="device-card-header">
+                        <div class="device-card-title">
+                            <span id="infoDeviceOsIcon" class="device-os-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                            </span>
+                            <span>Last Connected Device</span>
+                        </div>
+                        <span id="infoDeviceCurrentBadge" class="badge badge-neutral">Last Seen</span>
+                    </div>
+                    
+                    <div class="device-card-grid">
+                        <div class="device-grid-item">
+                            <span class="dev-lbl">Operating System</span>
+                            <span class="dev-val" id="infoDeviceOsVal">--</span>
+                        </div>
+                        <div class="device-grid-item">
+                            <span class="dev-lbl">Public Client IP</span>
+                            <span class="dev-val stat-mono" id="infoDeviceIpVal">--</span>
+                        </div>
+                        <div class="device-grid-item">
+                            <span class="dev-lbl">Virtual Tunnel IP (VIP)</span>
+                            <span class="dev-val stat-mono" id="infoDeviceVipVal">--</span>
+                        </div>
+                        <div class="device-grid-item">
+                            <span class="dev-lbl">Connection Time</span>
+                            <span class="dev-val" id="infoDeviceSeenVal">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Account Overview Card -->
+                <div class="account-overview-card">
+                    <div class="account-card-header">
+                        <span class="account-card-title">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            Account Overview
+                        </span>
+                    </div>
+                    <div class="account-info-grid">
+                        <div class="info-row">
+                            <span class="info-label">Account Status</span>
+                            <span class="info-value" id="infoAccountStatusVal">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Live Status</span>
+                            <span class="info-value" id="infoLiveStatusVal">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Data Quota</span>
+                            <div class="info-value-block">
+                                <span id="infoTrafficVal">--</span>
+                                <div class="progress-track" id="infoTrafTrack" style="width: 110px; height: 6px; margin-top: 4px; margin-left: auto;">
+                                    <div id="infoTrafBar" class="progress-bar" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Expiration</span>
+                            <span class="info-value" id="infoExpirationVal">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Device Limit</span>
+                            <span class="info-value" id="infoDeviceLimitVal">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Created At</span>
+                            <span class="info-value stat-mono" id="infoCreatedAtVal">--</span>
+                        </div>
+                        <div class="info-row" id="infoNoteRow" style="display: none;">
+                            <span class="info-label">Note</span>
+                            <span class="info-value" id="infoNoteVal">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer" style="justify-content: space-between;">
+                <button type="button" class="btn btn-secondary" onclick="closeUserInfoModal()">Close</button>
+                <button type="button" class="btn btn-primary" id="infoModalEditBtn" onclick="onInfoModalEditClick()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                    </svg>
+                    Edit User
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Custom Confirmation Modal -->
     <div id="confirmModal" class="modal">
         <div class="modal-content" style="max-width: 420px;">
@@ -938,11 +1097,187 @@
             document.body.classList.remove('modal-open');
         }
 
+        let activeInfoUserId = null;
+
+        function getOsSvgIcon(osName) {
+            const os = String(osName || '').toLowerCase();
+            if (os.includes('win')) {
+                return `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.901-1.801"/></svg>`;
+            } else if (os.includes('ios') || os.includes('mac') || os.includes('apple')) {
+                return `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 4.88c.63-.77 1.06-1.84.95-2.91-.91.04-2.02.61-2.67 1.38-.58.67-1.09 1.76-.95 2.81 1.02.08 2.05-.51 2.67-1.28z"/></svg>`;
+            } else if (os.includes('android')) {
+                return `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9993.4482.9993.9993.0001.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5896 8.411 13.854 8 12 8s-3.5896.411-5.1368.9507L4.8409 5.4477a.416.416 0 00-.5676-.1521.416.416 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1021-2.6889-7.5743-6.1185-9.4396"/></svg>`;
+            } else if (os.includes('linux')) {
+                return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`;
+            } else {
+                return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`;
+            }
+        }
+
+        function updateUserInfoModalContent(u) {
+            if (!u) return;
+            const userUname = document.getElementById('infoModalUsername');
+            const userSub = document.getElementById('infoModalSubtext');
+            if (userUname) userUname.innerText = u.username || 'User Details';
+            if (userSub) userSub.innerText = 'Account #' + u.id + ' • ' + (u.is_online ? 'Currently Online' : 'Currently Offline');
+
+            // 1. Live Network Card (Shown ONLY when user is online)
+            const liveNetCard = document.getElementById('infoUserLiveNetCard');
+            if (liveNetCard) {
+                if (u.is_online && u.live_net) {
+                    liveNetCard.style.display = 'block';
+                    const rxEl = document.getElementById('infoNetRxVal');
+                    const txEl = document.getElementById('infoNetTxVal');
+                    const sessEl = document.getElementById('infoSessionTrafficVal');
+                    const vipEl = document.getElementById('infoLiveVipVal');
+                    const durEl = document.getElementById('infoLiveDurationVal');
+
+                    if (rxEl) rxEl.innerText = '↓ ' + (u.live_net.net_rx || '0 B/s');
+                    if (txEl) txEl.innerText = '↑ ' + (u.live_net.net_tx || '0 B/s');
+                    if (sessEl) sessEl.innerText = '↓ ' + (u.live_net.bytes_in || '0 B') + ' / ↑ ' + (u.live_net.bytes_out || '0 B');
+                    if (vipEl) vipEl.innerText = u.live_net.vip || '--';
+                    if (durEl) durEl.innerText = u.live_net.established || 'Active';
+                } else {
+                    liveNetCard.style.display = 'none';
+                }
+            }
+
+            // 2. Last Connected Device Card (Shown ONLY if device info exists)
+            const devCard = document.getElementById('infoUserDeviceCard');
+            if (devCard) {
+                const dev = u.device_info;
+                const hasDevData = dev && (dev.ip || dev.os || dev.vip || dev.last_seen);
+                if (hasDevData) {
+                    devCard.style.display = 'block';
+                    const osVal = document.getElementById('infoDeviceOsVal');
+                    const osIcon = document.getElementById('infoDeviceOsIcon');
+                    const ipVal = document.getElementById('infoDeviceIpVal');
+                    const vipVal = document.getElementById('infoDeviceVipVal');
+                    const seenVal = document.getElementById('infoDeviceSeenVal');
+                    const badgeEl = document.getElementById('infoDeviceCurrentBadge');
+
+                    if (osVal) osVal.innerText = dev.os || 'Generic IKEv2';
+                    if (osIcon) osIcon.innerHTML = getOsSvgIcon(dev.os);
+                    if (ipVal) ipVal.innerText = dev.ip || '--';
+                    if (vipVal) vipVal.innerText = dev.vip || '--';
+                    if (seenVal) seenVal.innerText = u.is_online ? 'Connected Now' : (dev.last_seen || u.last_seen_formatted || '--');
+                    if (badgeEl) {
+                        if (u.is_online) {
+                            badgeEl.className = 'badge badge-online';
+                            badgeEl.innerText = 'Connected Now';
+                        } else {
+                            badgeEl.className = 'badge badge-neutral';
+                            badgeEl.innerText = 'Last Known Device';
+                        }
+                    }
+                } else {
+                    devCard.style.display = 'none';
+                }
+            }
+
+            // 3. Account Overview Card
+            const statusVal = document.getElementById('infoAccountStatusVal');
+            const liveVal = document.getElementById('infoLiveStatusVal');
+            const trafVal = document.getElementById('infoTrafficVal');
+            const trafTrack = document.getElementById('infoTrafTrack');
+            const trafBar = document.getElementById('infoTrafBar');
+            const expVal = document.getElementById('infoExpirationVal');
+            const devLimVal = document.getElementById('infoDeviceLimitVal');
+            const createdVal = document.getElementById('infoCreatedAtVal');
+            const noteRow = document.getElementById('infoNoteRow');
+            const noteVal = document.getElementById('infoNoteVal');
+
+            const maxDev = (u.max_devices && u.max_devices > 0) ? u.max_devices : 10;
+            if (statusVal) {
+                statusVal.innerHTML = `<span class="status-pill ${u.is_active === 1 ? 'status-active' : 'status-disabled'}">${u.is_active === 1 ? 'Active' : 'Disabled'}</span>`;
+            }
+            if (liveVal) {
+                liveVal.innerHTML = u.is_online 
+                    ? `<span class="badge badge-online">${u.device_count || 1} / ${maxDev} Online</span>`
+                    : `<span class="badge badge-neutral">Offline</span>`;
+            }
+            if (trafVal) {
+                const maxT = (u.max_traffic_gb && u.max_traffic_gb > 0) ? `${u.max_traffic_gb} GB` : '∞ Unlimited';
+                trafVal.innerText = `${u.used_traffic_formatted || '0 B'} / ${maxT}`;
+            }
+            if (trafTrack && trafBar) {
+                if (u.max_traffic_gb && u.max_traffic_gb > 0) {
+                    trafTrack.style.display = 'inline-block';
+                    const pct = Math.min(100, (u.traffic_percent || 0));
+                    trafBar.style.width = pct + '%';
+                    trafBar.className = 'progress-bar' + (pct > 90 ? ' progress-danger' : (pct > 70 ? ' progress-warning' : ''));
+                } else {
+                    trafTrack.style.display = 'none';
+                }
+            }
+            if (expVal) {
+                expVal.innerText = u.expire_date ? `${u.time_remaining} (${u.expire_date.substring(0, 10)})` : '∞ Lifetime';
+            }
+            if (devLimVal) {
+                devLimVal.innerText = `${maxDev} simultaneous devices`;
+            }
+            if (createdVal) {
+                createdVal.innerText = u.created_at || '--';
+            }
+            if (noteRow && noteVal) {
+                if (u.note) {
+                    noteRow.style.display = 'flex';
+                    noteVal.innerText = u.note;
+                } else {
+                    noteRow.style.display = 'none';
+                }
+            }
+        }
+
+        function openUserInfoModal(userId) {
+            activeInfoUserId = userId;
+            const targetUser = allUsers.find(u => String(u.id) === String(userId));
+            if (targetUser) {
+                updateUserInfoModalContent(targetUser);
+            }
+            
+            fetch(`/api/user/info/${userId}`)
+                .then(r => r.ok ? r.json() : null)
+                .then(res => {
+                    if (res && res.success && res.user && String(activeInfoUserId) === String(userId)) {
+                        updateUserInfoModalContent(res.user);
+                    }
+                })
+                .catch(() => {});
+
+            document.getElementById('userInfoModal').style.display = 'flex';
+            document.body.classList.add('modal-open');
+        }
+
+        function closeUserInfoModal() {
+            activeInfoUserId = null;
+            document.getElementById('userInfoModal').style.display = 'none';
+            document.body.classList.remove('modal-open');
+        }
+
+        function onInfoModalEditClick() {
+            if (!activeInfoUserId) return;
+            const uid = activeInfoUserId;
+            const targetUser = allUsers.find(u => String(u.id) === String(uid));
+            closeUserInfoModal();
+            if (targetUser) {
+                openEditModal(
+                    targetUser.id,
+                    targetUser.username,
+                    targetUser.max_traffic_gb || '',
+                    targetUser.remaining_days !== undefined ? targetUser.remaining_days : '',
+                    targetUser.note || '',
+                    targetUser.max_devices || 10
+                );
+            }
+        }
+
         window.onclick = function(event) {
             if (event.target == document.getElementById('addModal')) closeAddModal();
             if (event.target == document.getElementById('editModal')) closeEditModal();
             if (event.target == document.getElementById('confirmModal')) closeConfirmModal();
             if (event.target == document.getElementById('vpnDisabledModal')) closeVpnDisabledModal();
+            if (event.target == document.getElementById('userInfoModal')) closeUserInfoModal();
         }
 
         function copyFieldValue(elementId, btn) {
@@ -1270,6 +1605,13 @@
                             <input type="checkbox" id="user-toggle-${u.id}" ${isChecked} onchange="toggleUser('${u.id}', this)">
                             <span class="switch-slider"></span>
                         </label>
+                        <button type="button" class="btn-icon btn-info-user" id="user-info-btn-${u.id}" onclick="openUserInfoModal('${u.id}')" title="User Details & Live Network">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="16" x2="12" y2="12"/>
+                                <line x1="12" y1="8" x2="12.01" y2="8"/>
+                            </svg>
+                        </button>
                         <button class="btn-icon btn-edit-user" id="user-edit-btn-${u.id}" onclick="openEditModal('${u.id}', '${escapeHtml(u.username)}', '${u.max_traffic_gb || ''}', '${u.remaining_days !== undefined ? u.remaining_days : ''}', '${escapeHtml(u.note || '')}', '${maxDev}')" title="Edit User">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
@@ -1691,6 +2033,12 @@
                     if (data.users && Array.isArray(data.users)) {
                         allUsers = data.users;
                         renderUsersTable();
+                        if (activeInfoUserId) {
+                            const currentModalUser = allUsers.find(u => String(u.id) === String(activeInfoUserId));
+                            if (currentModalUser) {
+                                updateUserInfoModalContent(currentModalUser);
+                            }
+                        }
                     }
                 } catch(err) {
                     console.error("SSE parse error:", err);
