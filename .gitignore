@@ -1,2 +1,8 @@
 SKILL.md
-panel/__pycache__
+panel/__pycache__/
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+*.log
