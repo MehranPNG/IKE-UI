@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>IKE-UI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-layout">
+        <header class="navbar">
+            <div class="brand">
+                <h1 class="brand-title">IKE-UI</h1>
+            </div>
+
+            <div class="nav-actions">
+                <a href="{{ url_for('settings') }}" class="btn btn-secondary btn-sm">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                    Settings
+                </a>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline btn-sm">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                    Logout
+                </a>
+            </div>
+        </header>
+
+        <main class="main-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- System Resource Grid -->
+            <div class="system-grid">
+                <div class="sys-card">
+                    <div class="sys-header">
+                        <span class="sys-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+                            CPU Load
+                        </span>
+                        <span class="sys-value" id="sysCpuVal">{{ sys.cpu_percent }}%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-bar {% if sys.cpu_percent > 85 %}progress-danger{% elif sys.cpu_percent > 65 %}progress-warning{% endif %}" id="sysCpuBar" style="width: {{ sys.cpu_percent }}%;"></div>
+                    </div>
+                </div>
+
+                <div class="sys-card">
+                    <div class="sys-header">
+                        <span class="sys-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 19v-3"/><path d="M10 19v-3"/><path d="M14 19v-3"/><path d="M18 19v-3"/><path d="M2 5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5z"/></svg>
+                            Memory (RAM)
+                        </span>
+                        <span class="sys-value" id="sysRamVal">{{ sys.ram_percent }}%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-bar {% if sys.ram_percent > 85 %}progress-danger{% elif sys.ram_percent > 70 %}progress-warning{% endif %}" id="sysRamBar" style="width: {{ sys.ram_percent }}%;"></div>
+                    </div>
+                    <div class="sys-subtext">
+                        <span id="sysRamUsed">{{ sys.ram_used_gb }} GB</span>
+                        <span id="sysRamTotal">/ {{ sys.ram_total_gb }} GB</span>
+                    </div>
+                </div>
+
+                <div class="sys-card">
+                    <div class="sys-header">
+                        <span class="sys-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg>
+                            Disk Storage
+                        </span>
+                        <span class="sys-value" id="sysDiskVal">{{ sys.disk_percent }}%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-bar {% if sys.disk_percent > 85 %}progress-danger{% elif sys.disk_percent > 70 %}progress-warning{% endif %}" id="sysDiskBar" style="width: {{ sys.disk_percent }}%;"></div>
+                    </div>
+                    <div class="sys-subtext">
+                        <span id="sysDiskUsed">{{ sys.disk_used_gb }} GB</span>
+                        <span id="sysDiskTotal">/ {{ sys.disk_total_gb }} GB</span>
+                    </div>
+                </div>
+
+                <div class="sys-card">
+                    <div class="sys-header">
+                        <span class="sys-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                            Live Network
+                        </span>
+                    </div>
+                    <div class="net-speeds" style="margin-top: 6px;">
+                        <span class="net-badge-down" id="sysNetDown">↓ {{ sys.net_rx }}</span>
+                        <span class="net-badge-up" id="sysNetUp">↑ {{ sys.net_tx }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon icon-users">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                    </div>
+                    <div class="stat-details">
+                        <h3>Total Accounts</h3>
+                        <div class="stat-number" id="statTotalUsers">{{ total_users }}</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon icon-active">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                    </div>
+                    <div class="stat-details">
+                        <h3>Active Users</h3>
+                        <div class="stat-number" id="statActiveUsers">{{ active_users }}</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon icon-online">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                            <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                            <line x1="12" y1="20" x2="12.01" y2="20"/>
+                        </svg>
+                    </div>
+                    <div class="stat-details">
+                        <h3>Online Users</h3>
+                        <div class="stat-number" id="statOnlineCount"><span class="badge-pulse"></span> {{ online_count }}</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon icon-traffic">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <div class="stat-details">
+                        <h3>Total Consumption</h3>
+                        <div class="stat-number" id="statTotalTraffic">{{ total_traffic_bytes | format_bytes }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section Header & Search Bar -->
+            <div class="section-header">
+                <div class="section-title">
+                    <h2>Users</h2>
+                </div>
+                <button class="btn btn-primary" onclick="openAddModal()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    Add New User
+                </button>
+            </div>
+
+            <div class="search-container">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input type="text" id="userSearchInput" class="search-input" placeholder="Search users by name or note..." oninput="filterUsersTable()">
+            </div>
+
+            <!-- Users Table Card -->
+            <div class="card">
+                <div class="table-responsive">
+                    <table class="table" id="usersTable">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Live Status</th>
+                                <th>Data Quota</th>
+                                <th>Expiration</th>
+                                <th>Account Status</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            {% for u in users %}
+                            {% set is_online = u.username in online %}
+                            {% set online_data = online.get(u.username, {}) %}
+                            <tr id="user-row-{{ u.id }}" class="user-table-row" data-username="{{ u.username | lower }}" data-note="{{ (u.note or '') | lower }}">
+                                <td>
+                                    <div class="user-cell">
+                                        <div class="user-avatar">{{ u.username[:2].upper() }}</div>
+                                        <div class="user-meta">
+                                            <span class="user-name">{{ u.username }}</span>
+                                            {% if u.note %}<span class="user-note">{{ u.note }}</span>{% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td id="user-online-{{ u.id }}">
+                                    {% if is_online %}
+                                        {% set dev_cnt = online_data.get('device_count', 1) %}
+                                        <span class="badge-online">{{ dev_cnt }} Online</span>
+                                    {% else %}
+                                        <span class="badge badge-neutral">Offline</span>
+                                        {% set last_seen = u.last_online_at | format_last_seen %}
+                                        {% if last_seen %}
+                                            <div class="sub-text">Last seen: {{ last_seen }}</div>
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% set pct = u.used_traffic_bytes | traffic_percent(u.max_traffic_gb) %}
+                                    <div class="traffic-meter">
+                                        <div class="meter-text">
+                                            <span id="user-traf-used-{{ u.id }}">{{ u.used_traffic_bytes | format_bytes }}</span>
+                                            <span class="meter-max" id="user-traf-max-{{ u.id }}">/ {% if u.max_traffic_gb and u.max_traffic_gb > 0 %}{{ u.max_traffic_gb }} GB{% else %}∞ Unlimited{% endif %}</span>
+                                        </div>
+                                        <div class="progress-track" id="user-traf-track-{{ u.id }}" {% if not (u.max_traffic_gb and u.max_traffic_gb > 0) %}style="display: none;"{% endif %}>
+                                            <div id="user-traf-bar-{{ u.id }}" class="progress-bar {% if pct > 90 %}progress-danger{% elif pct > 70 %}progress-warning{% endif %}" style="width: {{ pct }}%;"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="expiration-cell">
+                                        <span class="exp-title" id="user-exp-{{ u.id }}">{% if u.expire_date %}{{ u.expire_date | time_remaining }}{% else %}∞ Lifetime{% endif %}</span>
+                                        <span class="sub-text" id="user-exp-sub-{{ u.id }}">{% if u.expire_date %}{{ u.expire_date[:10] }}{% endif %}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span id="user-status-{{ u.id }}" class="status-pill {% if u.is_active == 1 %}status-active{% else %}status-disabled{% endif %}">
+                                        {% if u.is_active == 1 %}Active{% else %}Disabled{% endif %}
+                                    </span>
+                                </td>
+                                <td class="text-right">
+                                    <div class="action-buttons">
+                                        <a href="{{ url_for('toggle_user', user_id=u.id) }}" class="btn-icon" title="Toggle User" id="user-toggle-btn-{{ u.id }}">
+                                            {% if u.is_active == 1 %}
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff4757" stroke-width="2">
+                                                <circle cx="12" cy="12" r="10"/>
+                                                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                                            </svg>
+                                            {% else %}
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00f59b" stroke-width="2">
+                                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                                <polyline points="22 4 12 14.01 9 11.01"/>
+                                            </svg>
+                                            {% endif %}
+                                        </a>
+
+                                        <button class="btn-icon btn-edit-user" id="user-edit-btn-{{ u.id }}" onclick="openEditModal('{{ u.id }}', '{{ u.username }}', '{{ u.max_traffic_gb or '' }}', '{{ u.expire_date | get_remaining_days }}', '{{ u.note or '' }}')" title="Edit User">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                                            </svg>
+                                        </button>
+
+                                        <a href="{{ url_for('delete_user', user_id=u.id) }}" class="btn-icon text-danger" onclick="return confirm('Are you sure you want to delete user {{ u.username }}?')" title="Delete User">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <polyline points="3 6 5 6 21 6"/>
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                            </svg>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr id="emptyRow">
+                                <td colspan="6" class="text-center empty-state">No users found. Click "Add New User" to create one.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add User Modal -->
+    <div id="addModal" class="modal">
+        <div class="modal-content">
+            <div id="addFormView">
+                <div class="modal-header">
+                    <h3>Add New User</h3>
+                    <button class="btn-close" onclick="closeAddModal()">&times;</button>
+                </div>
+                <form id="addUserForm" onsubmit="submitAddUser(event)">
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>Username</label>
+                            <input type="text" id="addUsername" name="username" placeholder="e.g. john" required autofocus>
+                        </div>
+                        <div class="form-group">
+                            <div class="label-row">
+                                <label>Password</label>
+                                <button type="button" class="btn-text-action" onclick="generateRandomPassword('addPassword')">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                                    Generate
+                                </button>
+                            </div>
+                            <input type="text" id="addPassword" name="password" placeholder="e.g. SecretPassword123" required>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group col">
+                                <label>Data Limit (GB)</label>
+                                <input type="number" step="0.5" min="0" name="max_traffic_gb" placeholder="Leave blank for unlimited">
+                            </div>
+                            <div class="form-group col">
+                                <label>Validity (Days)</label>
+                                <input type="number" min="0" name="duration_days" placeholder="Leave blank for unlimited">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Note / Owner</label>
+                            <input type="text" name="note" placeholder="e.g. iPhone John">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="btnAddSubmit">Create User</button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="addSuccessView" style="display: none;">
+                <div class="modal-header">
+                    <h3>Account Created Successfully!</h3>
+                    <button class="btn-close" onclick="closeAddModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="success-banner">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        <span>VPN Account Ready to Connect</span>
+                    </div>
+
+                    <div class="conn-info-list">
+                        <div class="conn-item">
+                            <span class="conn-label">Server</span>
+                            <span class="conn-value" id="succServer">{{ server_domain }}</span>
+                        </div>
+                        <div class="conn-item">
+                            <span class="conn-label">Username</span>
+                            <span class="conn-value" id="succUser"></span>
+                        </div>
+                        <div class="conn-item">
+                            <span class="conn-label">Password</span>
+                            <span class="conn-value pass-highlight" id="succPass" onclick="copyPasswordOnly('succPass')" title="Click to copy password"></span>
+                        </div>
+                        <div class="conn-item">
+                            <span class="conn-label">Traffic Quota</span>
+                            <span class="conn-value" id="succTraffic"></span>
+                        </div>
+                        <div class="conn-item">
+                            <span class="conn-label">Validity</span>
+                            <span class="conn-value" id="succExpire"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="btnCopyDetails" onclick="copyConnectionInfo()">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        <span id="copyBtnText">Copy Connection Info</span>
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="closeAddModal()">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit User Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div id="editFormView">
+                <div class="modal-header">
+                    <h3>Edit User: <span id="editModalUsername"></span></h3>
+                    <button class="btn-close" onclick="closeEditModal()">&times;</button>
+                </div>
+                <form id="editUserForm" onsubmit="submitEditUser(event)">
+                    <div class="modal-body">
+                        <div class="toggle-card">
+                            <div class="toggle-header" onclick="clickToggleHeader()">
+                                <span class="toggle-title">Change Password</span>
+                                <label class="toggle-switch" onclick="event.stopPropagation()">
+                                    <input type="checkbox" id="toggleChangePassword" name="change_password" value="yes" onchange="togglePasswordField()">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div id="passwordFieldContainer" style="display: none; margin-top: 1rem; border-top: 1px solid #23273c; padding-top: 0.85rem;">
+                                <div class="label-row">
+                                    <label>New Password</label>
+                                    <button type="button" class="btn-text-action" onclick="generateRandomPassword('editPassword')">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                                        Generate
+                                    </button>
+                                </div>
+                                <input type="text" id="editPassword" name="password" placeholder="Enter new password">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group col">
+                                <label>Data Limit (GB)</label>
+                                <input type="number" step="0.5" min="0" id="editMaxTraffic" name="max_traffic_gb" placeholder="Leave blank for unlimited">
+                            </div>
+                            <div class="form-group col">
+                                <label>Validity (Days)</label>
+                                <input type="number" min="0" id="editDurationDays" name="duration_days" placeholder="Leave blank for unlimited">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Note</label>
+                            <input type="text" id="editNote" name="note">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="btnEditSubmit">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="editSuccessView" style="display: none;">
+                <div class="modal-header">
+                    <h3>Password Updated Successfully!</h3>
+                    <button class="btn-close" onclick="closeEditModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="success-banner">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        <span>New Connection Credentials</span>
+                    </div>
+
+                    <div class="conn-info-list">
+                        <div class="conn-item">
+                            <span class="conn-label">Server</span>
+                            <span class="conn-value">{{ server_domain }}</span>
+                        </div>
+                        <div class="conn-item">
+                            <span class="conn-label">Username</span>
+                            <span class="conn-value" id="editSuccUser"></span>
+                        </div>
+                        <div class="conn-item">
+                            <span class="conn-label">New Password</span>
+                            <span class="conn-value pass-highlight" id="editSuccPass" onclick="copyPasswordOnly('editSuccPass')" title="Click to copy password"></span>
+                        </div>
+                        <div class="conn-item">
+                            <span class="conn-label">Traffic Quota</span>
+                            <span class="conn-value" id="editSuccTraffic"></span>
+                        </div>
+                        <div class="conn-item">
+                            <span class="conn-label">Validity</span>
+                            <span class="conn-value" id="editSuccExpire"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="copyEditConnectionInfo()">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        <span id="editCopyBtnText">Copy Connection Info</span>
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="closeEditModal()">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function generateRandomPassword(targetInputId) {
+            const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let res = '';
+            const array = new Uint32Array(10);
+            window.crypto.getRandomValues(array);
+            for (let i = 0; i < 10; i++) {
+                res += chars[array[i] % chars.length];
+            }
+            document.getElementById(targetInputId).value = res;
+        }
+
+        function clickToggleHeader() {
+            const chk = document.getElementById('toggleChangePassword');
+            chk.checked = !chk.checked;
+            togglePasswordField();
+        }
+
+        function togglePasswordField() {
+            const isChecked = document.getElementById('toggleChangePassword').checked;
+            const container = document.getElementById('passwordFieldContainer');
+            container.style.display = isChecked ? 'block' : 'none';
+            if (isChecked && !document.getElementById('editPassword').value) {
+                generateRandomPassword('editPassword');
+            }
+        }
+
+        function openAddModal() {
+            document.getElementById('addFormView').style.display = 'block';
+            document.getElementById('addSuccessView').style.display = 'none';
+            document.getElementById('addUserForm').reset();
+            generateRandomPassword('addPassword');
+            document.getElementById('addModal').style.display = 'flex';
+        }
+        function closeAddModal() {
+            document.getElementById('addModal').style.display = 'none';
+        }
+
+        let currentEditUserId = null;
+        function openEditModal(id, username, maxTraffic, remainingDays, note) {
+            currentEditUserId = id;
+            document.getElementById('editModalUsername').innerText = username;
+            document.getElementById('toggleChangePassword').checked = false;
+            document.getElementById('passwordFieldContainer').style.display = 'none';
+            document.getElementById('editPassword').value = '';
+            document.getElementById('editMaxTraffic').value = (maxTraffic && parseFloat(maxTraffic) > 0) ? maxTraffic : '';
+            document.getElementById('editDurationDays').value = (remainingDays !== '' && remainingDays !== null) ? remainingDays : '';
+            document.getElementById('editNote').value = note;
+            
+            document.getElementById('editFormView').style.display = 'block';
+            document.getElementById('editSuccessView').style.display = 'none';
+            document.getElementById('editModal').style.display = 'flex';
+        }
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            if (event.target == document.getElementById('addModal')) closeAddModal();
+            if (event.target == document.getElementById('editModal')) closeEditModal();
+        }
+
+        let lastCreatedPayload = null;
+        async function submitAddUser(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnAddSubmit');
+            btn.disabled = true;
+            btn.innerText = 'Creating...';
+
+            const form = document.getElementById('addUserForm');
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch('/user/add', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                });
+                const res = await response.json();
+
+                if (res.success) {
+                    lastCreatedPayload = res;
+                    document.getElementById('succServer').innerText = res.server;
+                    document.getElementById('succUser').innerText = res.username;
+                    document.getElementById('succPass').innerHTML = `${res.password} <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+                    document.getElementById('succTraffic').innerText = res.max_traffic;
+                    document.getElementById('succExpire').innerText = res.expire;
+
+                    document.getElementById('addFormView').style.display = 'none';
+                    document.getElementById('addSuccessView').style.display = 'block';
+                } else {
+                    alert(res.error || 'Failed to create user');
+                }
+            } catch (err) {
+                alert('Connection error occurred while creating user.');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Create User';
+            }
+        }
+
+        let lastEditedPayload = null;
+        async function submitEditUser(e) {
+            e.preventDefault();
+            if (!currentEditUserId) return;
+
+            const btn = document.getElementById('btnEditSubmit');
+            btn.disabled = true;
+            btn.innerText = 'Saving...';
+
+            const form = document.getElementById('editUserForm');
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch('/user/edit/' + currentEditUserId, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                });
+                const res = await response.json();
+
+                if (res.success) {
+                    const trafMaxEl = document.getElementById('user-traf-max-' + currentEditUserId);
+                    if (trafMaxEl) trafMaxEl.innerText = '/ ' + (res.max_traffic === 'Unlimited' ? '∞ Unlimited' : res.max_traffic);
+
+                    const trafTrack = document.getElementById('user-traf-track-' + currentEditUserId);
+                    if (trafTrack) {
+                        trafTrack.style.display = (res.max_traffic_gb && res.max_traffic_gb > 0) ? 'block' : 'none';
+                    }
+
+                    const expEl = document.getElementById('user-exp-' + currentEditUserId);
+                    if (expEl) expEl.innerText = res.expire_date ? (res.time_remaining || res.expire) : '∞ Lifetime';
+
+                    const expSubEl = document.getElementById('user-exp-sub-' + currentEditUserId);
+                    if (expSubEl) expSubEl.innerText = res.expire_date ? res.expire_date.substring(0, 10) : '';
+
+                    const row = document.getElementById('user-row-' + currentEditUserId);
+                    if (row) {
+                        const noteVal = res.note || '';
+                        row.setAttribute('data-note', noteVal.toLowerCase());
+                        let noteEl = row.querySelector('.user-note');
+                        if (noteVal) {
+                            if (noteEl) {
+                                noteEl.innerText = noteVal;
+                            } else {
+                                const meta = row.querySelector('.user-meta');
+                                if (meta) {
+                                    noteEl = document.createElement('span');
+                                    noteEl.className = 'user-note';
+                                    noteEl.innerText = noteVal;
+                                    meta.appendChild(noteEl);
+                                }
+                            }
+                        } else if (noteEl) {
+                            noteEl.remove();
+                        }
+
+                        const editBtn = document.getElementById('user-edit-btn-' + currentEditUserId);
+                        if (editBtn) {
+                            editBtn.setAttribute('onclick', `openEditModal('${res.user_id}', '${res.username}', '${res.max_traffic_gb || ''}', '${res.remaining_days !== undefined ? res.remaining_days : ''}', '${res.note || ''}')`);
+                        }
+                    }
+
+                    if (res.password_changed) {
+                        lastEditedPayload = res;
+                        document.getElementById('editSuccUser').innerText = res.username;
+                        document.getElementById('editSuccPass').innerHTML = `${res.password} <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+                        document.getElementById('editSuccTraffic').innerText = res.max_traffic;
+                        document.getElementById('editSuccExpire').innerText = res.expire;
+
+                        document.getElementById('editFormView').style.display = 'none';
+                        document.getElementById('editSuccessView').style.display = 'block';
+                    } else {
+                        closeEditModal();
+                    }
+                } else {
+                    alert(res.error || 'Failed to update user');
+                }
+            } catch (err) {
+                alert('Connection error occurred while updating user.');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Save Changes';
+            }
+        }
+
+        function copyPasswordOnly(elementId) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            const targetPayload = elementId === 'succPass' ? lastCreatedPayload : lastEditedPayload;
+            if (!targetPayload || !targetPayload.password) return;
+
+            navigator.clipboard.writeText(targetPayload.password).then(() => {
+                const orig = el.innerHTML;
+                el.innerText = 'Copied! ✓';
+                setTimeout(() => { el.innerHTML = orig; }, 1500);
+            });
+        }
+
+        function copyConnectionInfo() {
+            if (!lastCreatedPayload) return;
+            const text = `🌐 Server: ${lastCreatedPayload.server}\n👤 Username: ${lastCreatedPayload.username}\n🔑 Password: ${lastCreatedPayload.password}\n📊 Traffic: ${lastCreatedPayload.max_traffic}\n⏳ Validity: ${lastCreatedPayload.expire}`;
+            navigator.clipboard.writeText(text).then(() => {
+                const btnText = document.getElementById('copyBtnText');
+                const orig = btnText.innerText;
+                btnText.innerText = 'Copied! ✓';
+                setTimeout(() => { btnText.innerText = orig; }, 2000);
+            });
+        }
+
+        function copyEditConnectionInfo() {
+            if (!lastEditedPayload) return;
+            const text = `🌐 Server: ${lastEditedPayload.server}\n👤 Username: ${lastEditedPayload.username}\n🔑 Password: ${lastEditedPayload.password}\n📊 Traffic: ${lastEditedPayload.max_traffic}\n⏳ Validity: ${lastEditedPayload.expire}`;
+            navigator.clipboard.writeText(text).then(() => {
+                const btnText = document.getElementById('editCopyBtnText');
+                const orig = btnText.innerText;
+                btnText.innerText = 'Copied! ✓';
+                setTimeout(() => { btnText.innerText = orig; }, 2000);
+            });
+        }
+
+        function filterUsersTable() {
+            const query = document.getElementById('userSearchInput').value.toLowerCase().trim();
+            const rows = document.querySelectorAll('.user-table-row');
+
+            rows.forEach(row => {
+                const username = row.getAttribute('data-username') || '';
+                const note = row.getAttribute('data-note') || '';
+                if (username.includes(query) || note.includes(query)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        function renderUserRowHTML(u) {
+            const onlineHtml = u.is_online
+                ? `<span class="badge-online">${u.device_count || 1} Online</span>`
+                : `<span class="badge badge-neutral">Offline</span>${u.last_seen_formatted ? `<div class="sub-text">Last seen: ${u.last_seen_formatted}</div>` : ''}`;
+
+            const maxTrafText = (u.max_traffic_gb && u.max_traffic_gb > 0)
+                ? `${u.max_traffic_gb} GB`
+                : '∞ Unlimited';
+            const trafBarHtml = (u.max_traffic_gb && u.max_traffic_gb > 0)
+                ? `<div class="progress-track" id="user-traf-track-${u.id}"><div id="user-traf-bar-${u.id}" class="progress-bar ${u.traffic_percent > 90 ? 'progress-danger' : (u.traffic_percent > 70 ? 'progress-warning' : '')}" style="width: ${u.traffic_percent}%;"></div></div>`
+                : `<div class="progress-track" id="user-traf-track-${u.id}" style="display: none;"><div id="user-traf-bar-${u.id}" class="progress-bar" style="width: 0%;"></div></div>`;
+
+            const expTitle = u.expire_date ? u.time_remaining : '∞ Lifetime';
+            const expSub = u.expire_date ? `<span class="sub-text" id="user-exp-sub-${u.id}">${u.expire_date.substring(0, 10)}</span>` : `<span class="sub-text" id="user-exp-sub-${u.id}"></span>`;
+            const statusClass = u.is_active === 1 ? 'status-active' : 'status-disabled';
+            const statusText = u.is_active === 1 ? 'Active' : 'Disabled';
+            const toggleIcon = u.is_active === 1
+                ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff4757" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`
+                : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00f59b" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+
+            return `
+                <td>
+                    <div class="user-cell">
+                        <div class="user-avatar">${u.username.substring(0, 2).toUpperCase()}</div>
+                        <div class="user-meta">
+                            <span class="user-name">${u.username}</span>
+                            ${u.note ? `<span class="user-note">${u.note}</span>` : ''}
+                        </div>
+                    </div>
+                </td>
+                <td id="user-online-${u.id}">${onlineHtml}</td>
+                <td>
+                    <div class="traffic-meter">
+                        <div class="meter-text">
+                            <span id="user-traf-used-${u.id}">${u.used_traffic_formatted}</span>
+                            <span class="meter-max" id="user-traf-max-${u.id}">/ ${maxTrafText}</span>
+                        </div>
+                        ${trafBarHtml}
+                    </div>
+                </td>
+                <td>
+                    <div class="expiration-cell">
+                        <span class="exp-title" id="user-exp-${u.id}">${expTitle}</span>
+                        ${expSub}
+                    </div>
+                </td>
+                <td>
+                    <span id="user-status-${u.id}" class="status-pill ${statusClass}">${statusText}</span>
+                </td>
+                <td class="text-right">
+                    <div class="action-buttons">
+                        <a href="/user/toggle/${u.id}" class="btn-icon" title="Toggle User" id="user-toggle-btn-${u.id}">${toggleIcon}</a>
+                        <button class="btn-icon btn-edit-user" id="user-edit-btn-${u.id}" onclick="openEditModal('${u.id}', '${u.username}', '${u.max_traffic_gb || ''}', '${u.remaining_days !== undefined ? u.remaining_days : ''}', '${u.note || ''}')" title="Edit User">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                            </svg>
+                        </button>
+                        <a href="/user/delete/${u.id}" class="btn-icon text-danger" onclick="return confirm('Are you sure you want to delete user ${u.username}?')" title="Delete User">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                        </a>
+                    </div>
+                </td>
+            `;
+        }
+
+        let sseSource = null;
+        function initSSE() {
+            if (sseSource) {
+                sseSource.close();
+            }
+            sseSource = new EventSource("/api/stream");
+            
+            sseSource.onmessage = function(e) {
+                try {
+                    const data = JSON.parse(e.data);
+                    
+                    if (data.stats) {
+                        const elTotal = document.getElementById('statTotalUsers');
+                        const elActive = document.getElementById('statActiveUsers');
+                        const elOnline = document.getElementById('statOnlineCount');
+                        const elTraf = document.getElementById('statTotalTraffic');
+                        
+                        if (elTotal) elTotal.innerText = data.stats.total_users;
+                        if (elActive) elActive.innerText = data.stats.active_users;
+                        if (elOnline) elOnline.innerHTML = `<span class="badge-pulse"></span> ` + data.stats.online_count;
+                        if (elTraf) elTraf.innerText = data.stats.total_traffic;
+                    }
+
+                    if (data.sys) {
+                        const s = data.sys;
+                        const elCpu = document.getElementById('sysCpuVal');
+                        const elCpuBar = document.getElementById('sysCpuBar');
+                        if (elCpu) elCpu.innerText = s.cpu_percent + '%';
+                        if (elCpuBar) {
+                            elCpuBar.style.width = s.cpu_percent + '%';
+                            elCpuBar.className = 'progress-bar' + (s.cpu_percent > 85 ? ' progress-danger' : (s.cpu_percent > 65 ? ' progress-warning' : ''));
+                        }
+
+                        const elRam = document.getElementById('sysRamVal');
+                        const elRamBar = document.getElementById('sysRamBar');
+                        const elRamUsed = document.getElementById('sysRamUsed');
+                        const elRamTotal = document.getElementById('sysRamTotal');
+                        if (elRam) elRam.innerText = s.ram_percent + '%';
+                        if (elRamUsed) elRamUsed.innerText = s.ram_used_gb + ' GB';
+                        if (elRamTotal) elRamTotal.innerText = '/ ' + s.ram_total_gb + ' GB';
+                        if (elRamBar) {
+                            elRamBar.style.width = s.ram_percent + '%';
+                            elRamBar.className = 'progress-bar' + (s.ram_percent > 85 ? ' progress-danger' : (s.ram_percent > 70 ? ' progress-warning' : ''));
+                        }
+
+                        const elDisk = document.getElementById('sysDiskVal');
+                        const elDiskBar = document.getElementById('sysDiskBar');
+                        const elDiskUsed = document.getElementById('sysDiskUsed');
+                        const elDiskTotal = document.getElementById('sysDiskTotal');
+                        if (elDisk) elDisk.innerText = s.disk_percent + '%';
+                        if (elDiskUsed) elDiskUsed.innerText = s.disk_used_gb + ' GB';
+                        if (elDiskTotal) elDiskTotal.innerText = '/ ' + s.disk_total_gb + ' GB';
+                        if (elDiskBar) {
+                            elDiskBar.style.width = s.disk_percent + '%';
+                            elDiskBar.className = 'progress-bar' + (s.disk_percent > 85 ? ' progress-danger' : (s.disk_percent > 70 ? ' progress-warning' : ''));
+                        }
+
+                        const elNetDown = document.getElementById('sysNetDown');
+                        const elNetUp = document.getElementById('sysNetUp');
+                        if (elNetDown) elNetDown.innerText = '↓ ' + s.net_rx;
+                        if (elNetUp) elNetUp.innerText = '↑ ' + s.net_tx;
+                    }
+                    
+                    if (data.users && Array.isArray(data.users)) {
+                        const tbody = document.getElementById('usersTableBody');
+                        const incomingIds = new Set(data.users.map(u => String(u.id)));
+
+                        document.querySelectorAll('.user-table-row').forEach(row => {
+                            const rowId = row.id.replace('user-row-', '');
+                            if (!incomingIds.has(rowId)) {
+                                row.remove();
+                            }
+                        });
+
+                        data.users.forEach(u => {
+                            let row = document.getElementById('user-row-' + u.id);
+                            if (!row) {
+                                const emptyRow = document.getElementById('emptyRow');
+                                if (emptyRow) emptyRow.remove();
+
+                                row = document.createElement('tr');
+                                row.id = 'user-row-' + u.id;
+                                row.className = 'user-table-row';
+                                row.setAttribute('data-username', u.username.toLowerCase());
+                                row.setAttribute('data-note', (u.note || '').toLowerCase());
+                                row.innerHTML = renderUserRowHTML(u);
+                                tbody.insertBefore(row, tbody.firstChild);
+                                filterUsersTable();
+                            } else {
+                                const onlineEl = document.getElementById('user-online-' + u.id);
+                                if (onlineEl) {
+                                    if (u.is_online) {
+                                        const devCount = u.device_count || 1;
+                                        onlineEl.innerHTML = `<span class="badge-online">${devCount} Online</span>`;
+                                    } else {
+                                        let offlineHtml = `<span class="badge badge-neutral">Offline</span>`;
+                                        if (u.last_seen_formatted) {
+                                            offlineHtml += `<div class="sub-text">Last seen: ${u.last_seen_formatted}</div>`;
+                                        }
+                                        onlineEl.innerHTML = offlineHtml;
+                                    }
+                                }
+                                
+                                const trafUsedEl = document.getElementById('user-traf-used-' + u.id);
+                                if (trafUsedEl) trafUsedEl.innerText = u.used_traffic_formatted;
+
+                                const trafMaxEl = document.getElementById('user-traf-max-' + u.id);
+                                if (trafMaxEl) {
+                                    trafMaxEl.innerText = '/ ' + ((u.max_traffic_gb && u.max_traffic_gb > 0) ? u.max_traffic_gb + ' GB' : '∞ Unlimited');
+                                }
+                                
+                                const trafTrack = document.getElementById('user-traf-track-' + u.id);
+                                if (trafTrack) {
+                                    trafTrack.style.display = (u.max_traffic_gb && u.max_traffic_gb > 0) ? 'block' : 'none';
+                                }
+
+                                const trafBarEl = document.getElementById('user-traf-bar-' + u.id);
+                                if (trafBarEl) {
+                                    trafBarEl.style.width = u.traffic_percent + '%';
+                                    let barClass = 'progress-bar';
+                                    if (u.traffic_percent > 90) barClass += ' progress-danger';
+                                    else if (u.traffic_percent > 70) barClass += ' progress-warning';
+                                    trafBarEl.className = barClass;
+                                }
+                                
+                                const expEl = document.getElementById('user-exp-' + u.id);
+                                if (expEl) {
+                                    expEl.innerText = u.expire_date ? u.time_remaining : '∞ Lifetime';
+                                }
+
+                                const expSubEl = document.getElementById('user-exp-sub-' + u.id);
+                                if (expSubEl) {
+                                    expSubEl.innerText = u.expire_date ? u.expire_date.substring(0, 10) : '';
+                                }
+                                
+                                const statusEl = document.getElementById('user-status-' + u.id);
+                                if (statusEl) {
+                                    statusEl.className = 'status-pill ' + (u.is_active === 1 ? 'status-active' : 'status-disabled');
+                                    statusEl.innerText = u.is_active === 1 ? 'Active' : 'Disabled';
+                                }
+
+                                const editBtn = document.getElementById('user-edit-btn-' + u.id);
+                                if (editBtn) {
+                                    editBtn.setAttribute('onclick', `openEditModal('${u.id}', '${u.username}', '${u.max_traffic_gb || ''}', '${u.remaining_days !== undefined ? u.remaining_days : ''}', '${u.note || ''}')`);
+                                }
+                            }
+                        });
+                    }
+                } catch(err) {
+                    console.error("SSE parse error:", err);
+                }
+            };
+            
+            sseSource.onerror = function() {
+                setTimeout(initSSE, 3000);
+            };
+        }
+
+        document.addEventListener('DOMContentLoaded', initSSE);
+    </script>
+</body>
+</html>
