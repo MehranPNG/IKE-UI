@@ -54,7 +54,7 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.0.7"
+APP_VERSION = "1.0.8"
 
 app = Flask(
     __name__,
@@ -173,8 +173,11 @@ def get_system_metrics():
     prev_net_bytes = (curr_rx, curr_tx)
     prev_net_time = now
 
+    cpu_cores = os.cpu_count() or 1
+
     return {
         "cpu_percent": cpu_pct,
+        "cpu_cores": cpu_cores,
         "ram_used_gb": ram_used_gb,
         "ram_total_gb": ram_total_gb,
         "ram_percent": ram_pct,
@@ -1014,9 +1017,10 @@ def edit_user(user_id):
     flash(f"User '{user['username']}' updated successfully!", "success")
     return redirect(url_for("dashboard"))
 
-@app.route("/user/toggle/<int:user_id>")
+@app.route("/user/toggle/<int:user_id>", methods=["GET", "POST"])
 @login_required
 def toggle_user(user_id):
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.accept_mimetypes.best == "application/json"
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT username, is_active FROM users WHERE id = ?", (user_id,))
@@ -1032,9 +1036,20 @@ def toggle_user(user_id):
             disconnect_user_sas(user["username"])
                     
         status_str = "Enabled" if new_state == 1 else "Disabled"
+        if is_ajax:
+            return jsonify({
+                "success": True,
+                "user_id": user_id,
+                "is_active": new_state,
+                "username": user["username"],
+                "message": f"User '{user['username']}' is now {status_str}."
+            })
         flash(f"User '{user['username']}' is now {status_str}.", "info")
     else:
         conn.close()
+        if is_ajax:
+            return jsonify({"success": False, "error": "User not found!"}), 404
+        flash("User not found!", "danger")
     return redirect(url_for("dashboard"))
 
 @app.route("/user/delete/<int:user_id>")

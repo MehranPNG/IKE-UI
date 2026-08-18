@@ -2,7 +2,7 @@
 set -e
 
 REPO_URL="https://github.com/MehranPNG/IKE-UI.git"
-APP_VERSION="1.0.7"
+APP_VERSION="1.0.8"
 INSTALL_DIR="/opt/ike-ui"
 PANEL_DIR="${INSTALL_DIR}/panel"
 DB_DIR="/etc/strongswan-panel"
@@ -34,6 +34,23 @@ show_banner() {
          IKE-UI Manager v${APP_VERSION}
 BANNER
     echo -e "${CYAN}====================================================${NC}"
+    
+    local panel_domain=""
+    if [ -f /etc/systemd/system/ike-ui.service ]; then
+        panel_domain=$(grep -oP 'Environment="SERVER_DOMAIN=\K[^"]+' /etc/systemd/system/ike-ui.service 2>/dev/null || true)
+    fi
+    if [ -z "$panel_domain" ] && [ -f /etc/nginx/sites-available/ike-ui ]; then
+        panel_domain=$(grep -oP 'server_name\s+\K[^;]+' /etc/nginx/sites-available/ike-ui 2>/dev/null | head -n1 | tr -d ' ' || true)
+    fi
+
+    if [ -n "$panel_domain" ]; then
+        local status_badge="${GREEN}● Online${NC}"
+        if ! systemctl is-active --quiet ike-ui 2>/dev/null && ! systemctl is-active --quiet ikev2-panel 2>/dev/null; then
+            status_badge="${RED}○ Stopped${NC}"
+        fi
+        echo -e " ${BOLD}Panel URL:${NC} ${CYAN}https://${panel_domain}${NC} [${status_badge}]"
+        echo -e "${CYAN}====================================================${NC}"
+    fi
     echo -e "${NC}"
 }
 
