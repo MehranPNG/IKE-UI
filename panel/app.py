@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import os
 import sys
 import time
@@ -55,7 +54,7 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.0.6"
+APP_VERSION = "1.0.7"
 
 app = Flask(
     __name__,
@@ -269,6 +268,22 @@ def init_db():
 
 sync_lock = threading.Lock()
 
+def disconnect_user_sas(username, online_dict=None):
+    """Safely disconnect all active StrongSwan SAs for a specific username."""
+    if not username:
+        return
+    try:
+        if online_dict is None:
+            online_dict = fetch_online_users_raw()
+        user_info = online_dict.get(username)
+        if user_info:
+            for sa_id in user_info.get("sa_ids", []):
+                if sa_id:
+                    subprocess.run(["ipsec", "down", f"ikev2-vpn[{sa_id}]"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.run(["ipsec", "down", str(sa_id)], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        print(f"[!] Error disconnecting SAs for {username}: {e}", file=sys.stderr)
+
 def sync_ipsec_secrets():
     with sync_lock:
         try:
@@ -296,12 +311,16 @@ def sync_ipsec_secrets():
                         is_active = 0
                         
                 if is_active == 1:
-                    active_lines.append(f'{u["username"]} : EAP "{u["password"]}"')
+                    pwd = str(u["password"]).replace('\\', '\\\\').replace('"', '\\"')
+                    uname = str(u["username"]).replace('\\', '\\\\').replace('"', '\\"')
+                    active_lines.append(f'{uname} : EAP "{pwd}"')
                     
             os.makedirs(os.path.dirname(os.path.abspath(SECRETS_PATH)), exist_ok=True)
-            with open(SECRETS_PATH, "w") as f:
+            temp_secrets = f"{SECRETS_PATH}.tmp"
+            with open(temp_secrets, "w") as f:
                 f.write("\n".join(active_lines) + "\n")
-            os.chmod(SECRETS_PATH, 0o600)
+            os.chmod(temp_secrets, 0o600)
+            os.replace(temp_secrets, SECRETS_PATH)
             
             subprocess.run(["ipsec", "rereadsecrets"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception as e:
@@ -313,60 +332,165 @@ online_cache_lock = threading.Lock()
 
 def fetch_online_users_raw():
     online = {}
-    db_users = get_db_usernames()
-    
     try:
+        db_users = get_db_usernames()
+        if not db_users:
+            return online
+            
+        db_users_set = set(db_users)
+        db_users_lower = {u.lower(): u for u in db_users}
+        
         res = subprocess.run(["ipsec", "statusall"], capture_output=True, text=True, check=False)
         output = res.stdout or ""
         
-        current_user = None
+        lines = output.splitlines()
+        sa_blocks = {}
         current_sa_id = None
         
-        for line in output.splitlines():
-            est_match = re.search(r'\[(\d+)\]:\s+ESTABLISHED\s+([^,]+),\s+.*?\.\.\..*?\[([^\]]+)\]\s*$', line)
-            if est_match:
-                current_sa_id = est_match.group(1)
-                raw_user = est_match.group(3).strip()
-                
-                if raw_user in db_users:
-                    current_user = raw_user
-                    if current_user not in online:
-                        online[current_user] = {
-                            "username": current_user,
-                            "sa_ids": [current_sa_id],
-                            "vips": [],
-                            "bytes_in": 0,
-                            "bytes_out": 0,
-                            "bytes_total": 0
-                        }
-                    else:
-                        if current_sa_id not in online[current_user]["sa_ids"]:
-                            online[current_user]["sa_ids"].append(current_sa_id)
-                else:
-                    current_user = None
+        for line in lines:
+            # Match IKE SA line: e.g. `ikev2-vpn[1]: ESTABLISHED` or `[1]: ESTABLISHED`
+            ike_match = re.search(r'(?:^|\s)[\w.-]*\[(\d+)\]:\s*(.*)$', line)
+            if ike_match:
+                sa_id = ike_match.group(1)
+                current_sa_id = sa_id
+                if current_sa_id not in sa_blocks:
+                    sa_blocks[current_sa_id] = []
+                sa_blocks[current_sa_id].append(line)
                 continue
                 
-            if current_user and current_user in online:
-                bytes_match = re.search(r'(\d+)\s+bytes_i.*?(\d+)\s+bytes_o', line)
-                if bytes_match:
-                    b_in = int(bytes_match.group(1))
-                    b_out = int(bytes_match.group(2))
-                    online[current_user]["bytes_in"] += b_in
-                    online[current_user]["bytes_out"] += b_out
-                    online[current_user]["bytes_total"] += (b_in + b_out)
-                    
-                vip_match = re.search(r'(\b10\.\d+\.\d+\.\d+\b)', line)
-                if not vip_match:
-                    vip_match = re.search(r'(?!0\.0\.0\.0)(\d+\.\d+\.\d+\.\d+)/\d+', line)
-                if vip_match:
-                    vip_ip = vip_match.group(1)
-                    if vip_ip not in online[current_user]["vips"]:
-                        online[current_user]["vips"].append(vip_ip)
+            # Match Child SA line: e.g. `ikev2-vpn{1}: INSTALLED`
+            child_match = re.search(r'(?:^|\s)[\w.-]*\{(\d+)\}:\s*(.*)$', line)
+            if child_match:
+                if current_sa_id is not None:
+                    sa_blocks[current_sa_id].append(line)
+                continue
+                
+            # Continuation line under current SA block
+            if current_sa_id is not None and (line.startswith(' ') or line.startswith('\t')):
+                sa_blocks[current_sa_id].append(line)
+            else:
+                if line.strip() and not line.startswith(' '):
+                    current_sa_id = None
+
+        # Parse each SA block
+        for sa_id, block_lines in sa_blocks.items():
+            block_text = "\n".join(block_lines)
+            
+            # Check if SA is ESTABLISHED
+            if not re.search(r'ESTABLISHED', block_text, re.IGNORECASE):
+                continue
+                
+            candidates = []
+            
+            # 1. EAP identity patterns (Remote EAP identity, EAP identity, EAP identity '%any' -> ...)
+            eap_matches = re.findall(r'(?:Remote\s+)?EAP\s+identity(?:\s*\'%any\'\s*->)?\s*[:\s]\s*[\'\"]?([^\'\s\n\r,\]]+)', block_text, re.IGNORECASE)
+            for m in eap_matches:
+                candidates.append(m.strip("'\" \t"))
+                
+            # 2. Remote identity patterns
+            rem_matches = re.findall(r'Remote\s+identity\s*[:\s]\s*[\'\"]?([^\'\s\n\r,\]]+)', block_text, re.IGNORECASE)
+            for m in rem_matches:
+                candidates.append(m.strip("'\" \t"))
+                
+            # 3. ESTABLISHED line remote ID
+            for bline in block_lines:
+                if 'ESTABLISHED' in bline:
+                    est_rem = re.search(r'\.\.\.[^\[\n\r]*\[([^\]]+)\]', bline)
+                    if est_rem:
+                        raw_id = est_rem.group(1).strip()
+                        if ':' in raw_id and not raw_id.startswith('::'):
+                            parts = raw_id.split(':')
+                            candidates.append(parts[0].strip("'\" \t"))
+                        candidates.append(raw_id.strip("'\" \t"))
                         
-        for u, data in online.items():
-            data["device_count"] = max(len(data["vips"]), 1)
+            # Match candidate against database users
+            matched_user = None
+            for cand in candidates:
+                cand_clean = cand
+                if '\\' in cand_clean:
+                    cand_clean = cand_clean.split('\\')[-1]
+                if '/' in cand_clean:
+                    cand_clean = cand_clean.split('/')[-1]
+                if '@' in cand_clean and cand_clean not in db_users_set:
+                    cand_clean = cand_clean.split('@')[0]
+                    
+                if cand in db_users_set:
+                    matched_user = cand
+                    break
+                elif cand_clean in db_users_set:
+                    matched_user = cand_clean
+                    break
+                elif cand.lower() in db_users_lower:
+                    matched_user = db_users_lower[cand.lower()]
+                    break
+                elif cand_clean.lower() in db_users_lower:
+                    matched_user = db_users_lower[cand_clean.lower()]
+                    break
+                    
+            if not matched_user:
+                continue
+                
+            # Extract traffic bytes for this SA
+            bytes_in = 0
+            bytes_out = 0
+            for bline in block_lines:
+                bm = re.search(r'(\d+)\s+bytes_i.*?(\d+)\s+bytes_o', bline)
+                if bm:
+                    bytes_in += int(bm.group(1))
+                    bytes_out += int(bm.group(2))
+                    
+            # Extract VIP
+            vip = None
+            for bline in block_lines:
+                vip_m = re.search(r'===\s*(10\.\d+\.\d+\.\d+|(?:\d{1,3}\.){3}\d{1,3})', bline)
+                if vip_m:
+                    vip = vip_m.group(1)
+                    break
+                vip_fallback = re.search(r'(?!0\.0\.0\.0)(\b10\.\d+\.\d+\.\d+\b)', bline)
+                if vip_fallback:
+                    vip = vip_fallback.group(1)
+                    break
+                    
+            # Group per user
+            if matched_user not in online:
+                online[matched_user] = {
+                    "username": matched_user,
+                    "sa_ids": [sa_id],
+                    "vips": [vip] if vip else [],
+                    "bytes_in": bytes_in,
+                    "bytes_out": bytes_out,
+                    "bytes_total": bytes_in + bytes_out,
+                    "device_count": 1,
+                    "sas": {
+                        sa_id: {
+                            "sa_id": sa_id,
+                            "bytes_in": bytes_in,
+                            "bytes_out": bytes_out,
+                            "bytes_total": bytes_in + bytes_out,
+                            "vip": vip
+                        }
+                    }
+                }
+            else:
+                if sa_id not in online[matched_user]["sa_ids"]:
+                    online[matched_user]["sa_ids"].append(sa_id)
+                if vip and vip not in online[matched_user]["vips"]:
+                    online[matched_user]["vips"].append(vip)
+                online[matched_user]["bytes_in"] += bytes_in
+                online[matched_user]["bytes_out"] += bytes_out
+                online[matched_user]["bytes_total"] += (bytes_in + bytes_out)
+                online[matched_user]["sas"][sa_id] = {
+                    "sa_id": sa_id,
+                    "bytes_in": bytes_in,
+                    "bytes_out": bytes_out,
+                    "bytes_total": bytes_in + bytes_out,
+                    "vip": vip
+                }
+                online[matched_user]["device_count"] = len(online[matched_user]["sa_ids"])
+                
     except Exception as e:
         print(f"[!] Error parsing ipsec statusall: {e}", file=sys.stderr)
+        
     return online
 
 def get_online_users(ttl=1.5):
@@ -382,10 +506,10 @@ def get_online_users(ttl=1.5):
         cached_online_time = now
     return fresh_online
 
-last_seen_bytes = {}
+last_seen_sa_bytes = {}
 
 def accounting_daemon():
-    global last_seen_bytes
+    global last_seen_sa_bytes
     while not shutdown_event.is_set():
         try:
             online = fetch_online_users_raw()
@@ -395,28 +519,37 @@ def accounting_daemon():
             conn = get_db()
             cursor = conn.cursor()
             
+            active_sa_ids = set()
+            user_deltas = {}
+            
             for username, data in online.items():
-                current_total = data["bytes_total"]
-                prev_total = last_seen_bytes.get(username, 0)
-                
-                delta = 0
-                if current_total >= prev_total:
-                    delta = current_total - prev_total
-                else:
-                    delta = current_total
+                for sa_id, sa_data in data.get("sas", {}).items():
+                    active_sa_ids.add(sa_id)
+                    curr_bytes = sa_data["bytes_total"]
+                    prev_bytes = last_seen_sa_bytes.get(sa_id, 0)
                     
-                last_seen_bytes[username] = current_total
+                    delta = 0
+                    if curr_bytes >= prev_bytes:
+                        delta = curr_bytes - prev_bytes
+                    else:
+                        delta = curr_bytes
+                        
+                    last_seen_sa_bytes[sa_id] = curr_bytes
+                    if delta > 0:
+                        user_deltas[username] = user_deltas.get(username, 0) + delta
+                        
+                cursor.execute("UPDATE users SET last_online_at = ? WHERE username = ?", (now_str, username))
                 
+            for username, delta in user_deltas.items():
                 cursor.execute("""
                     UPDATE users 
-                    SET used_traffic_bytes = COALESCE(used_traffic_bytes, 0) + ?,
-                        last_online_at = ?
+                    SET used_traffic_bytes = COALESCE(used_traffic_bytes, 0) + ?
                     WHERE username = ?
-                """, (delta, now_str, username))
-            
-            for u in list(last_seen_bytes.keys()):
-                if u not in online:
-                    del last_seen_bytes[u]
+                """, (delta, username))
+                
+            for sa_id in list(last_seen_sa_bytes.keys()):
+                if sa_id not in active_sa_ids:
+                    del last_seen_sa_bytes[sa_id]
                     
             conn.commit()
             
@@ -444,9 +577,7 @@ def accounting_daemon():
                 if needs_disable and is_active == 1:
                     cursor.execute("UPDATE users SET is_active = 0 WHERE id = ?", (u["id"],))
                     should_resync = True
-                    if u["username"] in online:
-                        for sa_id in online[u["username"]].get("sa_ids", []):
-                            subprocess.run(["ipsec", "down", f"ikev2-vpn[{sa_id}]"], check=False)
+                    disconnect_user_sas(u["username"], online)
                             
             conn.commit()
             conn.close()
@@ -860,6 +991,8 @@ def edit_user(user_id):
     conn.close()
     
     sync_ipsec_secrets()
+    if pwd_was_changed:
+        disconnect_user_sas(user["username"])
     
     if is_ajax:
         return jsonify({
@@ -896,10 +1029,7 @@ def toggle_user(user_id):
         sync_ipsec_secrets()
         
         if new_state == 0:
-            online = get_online_users()
-            if user["username"] in online:
-                for sa_id in online[user["username"]].get("sa_ids", []):
-                    subprocess.run(["ipsec", "down", f"ikev2-vpn[{sa_id}]"], check=False)
+            disconnect_user_sas(user["username"])
                     
         status_str = "Enabled" if new_state == 1 else "Disabled"
         flash(f"User '{user['username']}' is now {status_str}.", "info")
@@ -920,11 +1050,7 @@ def delete_user(user_id):
         conn.commit()
         conn.close()
         sync_ipsec_secrets()
-        
-        online = get_online_users()
-        if username in online:
-            for sa_id in online[username].get("sa_ids", []):
-                subprocess.run(["ipsec", "down", f"ikev2-vpn[{sa_id}]"], check=False)
+        disconnect_user_sas(username)
                 
         flash(f"User '{username}' deleted successfully!", "warning")
     else:
