@@ -233,7 +233,7 @@
                                         <span class="badge badge-neutral">Offline</span>
                                         {% set last_seen = u.last_online_at | format_last_seen %}
                                         {% if last_seen %}
-                                            <div class="sub-text">Last seen: {{ last_seen }}</div>
+                                            <div class="sub-text">{{ last_seen }}</div>
                                         {% endif %}
                                     {% endif %}
                                 </td>
@@ -330,11 +330,31 @@
                         <div class="form-row">
                             <div class="form-group col">
                                 <label>Data Limit (GB)</label>
-                                <input type="number" step="0.5" min="0" name="max_traffic_gb" placeholder="Leave blank for unlimited">
+                                <div class="number-stepper-wrap">
+                                    <input type="number" step="0.5" min="0" id="addMaxTraffic" name="max_traffic_gb" placeholder="∞ Unlimited">
+                                    <div class="stepper-controls">
+                                        <button type="button" class="stepper-btn" onclick="stepNumberInput('addMaxTraffic', 1, 1)" title="Increase">
+                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="18 15 12 9 6 15"/></svg>
+                                        </button>
+                                        <button type="button" class="stepper-btn" onclick="stepNumberInput('addMaxTraffic', -1, 1)" title="Decrease">
+                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                             <div class="form-group col">
                                 <label>Validity (Days)</label>
-                                <input type="number" min="0" name="duration_days" placeholder="Leave blank for unlimited">
+                                <div class="number-stepper-wrap">
+                                    <input type="number" min="0" id="addDurationDays" name="duration_days" placeholder="∞ Lifetime">
+                                    <div class="stepper-controls">
+                                        <button type="button" class="stepper-btn" onclick="stepNumberInput('addDurationDays', 1, 1)" title="Increase">
+                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="18 15 12 9 6 15"/></svg>
+                                        </button>
+                                        <button type="button" class="stepper-btn" onclick="stepNumberInput('addDurationDays', -1, 1)" title="Decrease">
+                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="form-group">
@@ -363,15 +383,30 @@
                     <div class="conn-info-list">
                         <div class="conn-item">
                             <span class="conn-label">Server</span>
-                            <span class="conn-value" id="succServer">{{ server_domain }}</span>
+                            <div class="conn-val-wrap">
+                                <span class="conn-value" id="succServer">{{ server_domain }}</span>
+                                <button type="button" class="btn-copy-field" onclick="copyFieldValue('succServer', this)" title="Copy Server Address">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                </button>
+                            </div>
                         </div>
                         <div class="conn-item">
                             <span class="conn-label">Username</span>
-                            <span class="conn-value" id="succUser"></span>
+                            <div class="conn-val-wrap">
+                                <span class="conn-value" id="succUser"></span>
+                                <button type="button" class="btn-copy-field" onclick="copyFieldValue('succUser', this)" title="Copy Username">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                </button>
+                            </div>
                         </div>
                         <div class="conn-item">
                             <span class="conn-label">Password</span>
-                            <span class="conn-value pass-highlight" id="succPass" onclick="copyPasswordOnly('succPass')" title="Click to copy password"></span>
+                            <div class="conn-val-wrap">
+                                <span class="conn-value pass-highlight" id="succPass"></span>
+                                <button type="button" class="btn-copy-field" onclick="copyFieldValue('succPass', this)" title="Copy Password">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                </button>
+                            </div>
                         </div>
                         <div class="conn-item">
                             <span class="conn-label">Traffic Quota</span>
@@ -428,11 +463,31 @@
                         <div class="form-row">
                             <div class="form-group col">
                                 <label>Data Limit (GB)</label>
-                                <input type="number" step="0.5" min="0" id="editMaxTraffic" name="max_traffic_gb" placeholder="Leave blank for unlimited">
+                                <div class="number-stepper-wrap">
+                                    <input type="number" step="0.5" min="0" id="editMaxTraffic" name="max_traffic_gb" placeholder="∞ Unlimited">
+                                    <div class="stepper-controls">
+                                        <button type="button" class="stepper-btn" onclick="stepNumberInput('editMaxTraffic', 1, 1)" title="Increase">
+                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="18 15 12 9 6 15"/></svg>
+                                        </button>
+                                        <button type="button" class="stepper-btn" onclick="stepNumberInput('editMaxTraffic', -1, 1)" title="Decrease">
+                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                             <div class="form-group col">
                                 <label>Validity (Days)</label>
-                                <input type="number" min="0" id="editDurationDays" name="duration_days" placeholder="Leave blank for unlimited">
+                                <div class="number-stepper-wrap">
+                                    <input type="number" min="0" id="editDurationDays" name="duration_days" placeholder="∞ Lifetime">
+                                    <div class="stepper-controls">
+                                        <button type="button" class="stepper-btn" onclick="stepNumberInput('editDurationDays', 1, 1)" title="Increase">
+                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="18 15 12 9 6 15"/></svg>
+                                        </button>
+                                        <button type="button" class="stepper-btn" onclick="stepNumberInput('editDurationDays', -1, 1)" title="Decrease">
+                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="form-group">
@@ -461,15 +516,30 @@
                     <div class="conn-info-list">
                         <div class="conn-item">
                             <span class="conn-label">Server</span>
-                            <span class="conn-value">{{ server_domain }}</span>
+                            <div class="conn-val-wrap">
+                                <span class="conn-value" id="editSuccServer">{{ server_domain }}</span>
+                                <button type="button" class="btn-copy-field" onclick="copyFieldValue('editSuccServer', this)" title="Copy Server Address">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                </button>
+                            </div>
                         </div>
                         <div class="conn-item">
                             <span class="conn-label">Username</span>
-                            <span class="conn-value" id="editSuccUser"></span>
+                            <div class="conn-val-wrap">
+                                <span class="conn-value" id="editSuccUser"></span>
+                                <button type="button" class="btn-copy-field" onclick="copyFieldValue('editSuccUser', this)" title="Copy Username">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                </button>
+                            </div>
                         </div>
                         <div class="conn-item">
                             <span class="conn-label">New Password</span>
-                            <span class="conn-value pass-highlight" id="editSuccPass" onclick="copyPasswordOnly('editSuccPass')" title="Click to copy password"></span>
+                            <div class="conn-val-wrap">
+                                <span class="conn-value pass-highlight" id="editSuccPass"></span>
+                                <button type="button" class="btn-copy-field" onclick="copyFieldValue('editSuccPass', this)" title="Copy Password">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                </button>
+                            </div>
                         </div>
                         <div class="conn-item">
                             <span class="conn-label">Traffic Quota</span>
@@ -504,6 +574,15 @@
             document.getElementById(targetInputId).value = res;
         }
 
+        function stepNumberInput(inputId, delta, step = 1) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            let val = parseFloat(input.value) || 0;
+            val = Math.max(0, Math.round((val + delta * step) * 10) / 10);
+            input.value = val === 0 && delta < 0 ? '' : val;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
         function clickToggleHeader() {
             const chk = document.getElementById('toggleChangePassword');
             chk.checked = !chk.checked;
@@ -525,9 +604,11 @@
             document.getElementById('addUserForm').reset();
             generateRandomPassword('addPassword');
             document.getElementById('addModal').style.display = 'flex';
+            document.body.classList.add('modal-open');
         }
         function closeAddModal() {
             document.getElementById('addModal').style.display = 'none';
+            document.body.classList.remove('modal-open');
         }
 
         let currentEditUserId = null;
@@ -544,14 +625,34 @@
             document.getElementById('editFormView').style.display = 'block';
             document.getElementById('editSuccessView').style.display = 'none';
             document.getElementById('editModal').style.display = 'flex';
+            document.body.classList.add('modal-open');
         }
         function closeEditModal() {
             document.getElementById('editModal').style.display = 'none';
+            document.body.classList.remove('modal-open');
         }
 
         window.onclick = function(event) {
             if (event.target == document.getElementById('addModal')) closeAddModal();
             if (event.target == document.getElementById('editModal')) closeEditModal();
+        }
+
+        function copyFieldValue(elementId, btn) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            const text = el.innerText.trim();
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => {
+                if (btn) {
+                    btn.classList.add('copied');
+                    const origHTML = btn.innerHTML;
+                    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`;
+                    setTimeout(() => {
+                        btn.classList.remove('copied');
+                        btn.innerHTML = origHTML;
+                    }, 1500);
+                }
+            });
         }
 
         let lastCreatedPayload = null;
@@ -576,9 +677,50 @@
                     lastCreatedPayload = res;
                     document.getElementById('succServer').innerText = res.server;
                     document.getElementById('succUser').innerText = res.username;
-                    document.getElementById('succPass').innerHTML = `${res.password} <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+                    document.getElementById('succPass').innerText = res.password;
                     document.getElementById('succTraffic').innerText = res.max_traffic;
                     document.getElementById('succExpire').innerText = res.expire;
+
+                    // Instantly render in table
+                    const tbody = document.getElementById('usersTableBody');
+                    const emptyRow = document.getElementById('emptyRow');
+                    if (emptyRow) emptyRow.remove();
+
+                    let existingRow = document.getElementById('user-row-' + res.user_id);
+                    if (existingRow) existingRow.remove();
+
+                    const newUser = {
+                        id: res.user_id,
+                        username: res.username,
+                        is_online: false,
+                        device_count: 0,
+                        last_online_at: null,
+                        last_seen_formatted: '',
+                        used_traffic_bytes: 0,
+                        used_traffic_formatted: '0 B',
+                        max_traffic_gb: res.max_traffic_gb || 0,
+                        traffic_percent: 0,
+                        expire_date: res.expire_date || '',
+                        remaining_days: res.remaining_days !== undefined ? res.remaining_days : '',
+                        time_remaining: res.expire || '∞ Lifetime',
+                        is_active: 1,
+                        note: res.note || ''
+                    };
+
+                    const newRow = document.createElement('tr');
+                    newRow.id = 'user-row-' + res.user_id;
+                    newRow.className = 'user-table-row';
+                    newRow.setAttribute('data-username', res.username.toLowerCase());
+                    newRow.setAttribute('data-note', (res.note || '').toLowerCase());
+                    newRow.innerHTML = renderUserRowHTML(newUser);
+                    tbody.insertBefore(newRow, tbody.firstChild);
+
+                    const elTotal = document.getElementById('statTotalUsers');
+                    if (elTotal) elTotal.innerText = parseInt(elTotal.innerText || '0') + 1;
+                    const elActive = document.getElementById('statActiveUsers');
+                    if (elActive) elActive.innerText = parseInt(elActive.innerText || '0') + 1;
+
+                    filterUsersTable();
 
                     document.getElementById('addFormView').style.display = 'none';
                     document.getElementById('addSuccessView').style.display = 'block';
@@ -657,8 +799,9 @@
 
                     if (res.password_changed) {
                         lastEditedPayload = res;
+                        document.getElementById('editSuccServer').innerText = res.server;
                         document.getElementById('editSuccUser').innerText = res.username;
-                        document.getElementById('editSuccPass').innerHTML = `${res.password} <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+                        document.getElementById('editSuccPass').innerText = res.password;
                         document.getElementById('editSuccTraffic').innerText = res.max_traffic;
                         document.getElementById('editSuccExpire').innerText = res.expire;
 
@@ -681,10 +824,9 @@
         function copyPasswordOnly(elementId) {
             const el = document.getElementById(elementId);
             if (!el) return;
-            const targetPayload = elementId === 'succPass' ? lastCreatedPayload : lastEditedPayload;
-            if (!targetPayload || !targetPayload.password) return;
-
-            navigator.clipboard.writeText(targetPayload.password).then(() => {
+            const text = el.innerText.trim();
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => {
                 const orig = el.innerHTML;
                 el.innerText = 'Copied! ✓';
                 setTimeout(() => { el.innerHTML = orig; }, 1500);
@@ -731,7 +873,7 @@
         function renderUserRowHTML(u) {
             const onlineHtml = u.is_online
                 ? `<span class="badge-online">${u.device_count || 1} Online</span>`
-                : `<span class="badge badge-neutral">Offline</span>${u.last_seen_formatted ? `<div class="sub-text">Last seen: ${u.last_seen_formatted}</div>` : ''}`;
+                : `<span class="badge badge-neutral">Offline</span>${u.last_seen_formatted ? `<div class="sub-text">${u.last_seen_formatted}</div>` : ''}`;
 
             const maxTrafText = (u.max_traffic_gb && u.max_traffic_gb > 0)
                 ? `${u.max_traffic_gb} GB`
@@ -893,7 +1035,7 @@
                                     } else {
                                         let offlineHtml = `<span class="badge badge-neutral">Offline</span>`;
                                         if (u.last_seen_formatted) {
-                                            offlineHtml += `<div class="sub-text">Last seen: ${u.last_seen_formatted}</div>`;
+                                            offlineHtml += `<div class="sub-text">${u.last_seen_formatted}</div>`;
                                         }
                                         onlineEl.innerHTML = offlineHtml;
                                     }

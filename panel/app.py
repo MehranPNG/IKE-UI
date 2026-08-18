@@ -39,7 +39,7 @@ def get_persistent_secret_key():
         print(f"[!] Warning: Could not save secret.key: {e}", file=sys.stderr)
     return new_key
 
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.2"
 
 app = Flask(
     __name__,
