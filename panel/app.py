@@ -56,7 +56,7 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
 
 app = Flask(
     __name__,
@@ -1665,7 +1665,7 @@ def backup_full():
 @app.route("/restore/users/validate", methods=["POST"])
 @login_required
 def restore_users_validate():
-    """Validates an uploaded database file and returns user count and sample preview."""
+    """Validates an uploaded database file and returns user count."""
     if "backup_file" not in request.files:
         return jsonify({"success": False, "error": "No backup file uploaded."}), 400
 
@@ -1682,11 +1682,9 @@ def restore_users_validate():
     if not is_valid:
         return jsonify({"success": False, "error": error_msg}), 400
 
-    preview = [u["username"] for u in users[:5]]
     return jsonify({
         "success": True,
-        "user_count": len(users),
-        "preview": preview
+        "user_count": len(users)
     })
 
 @app.route("/restore/users/execute", methods=["POST"])
