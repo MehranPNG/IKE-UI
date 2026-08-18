@@ -9,6 +9,10 @@ import shutil
 import re
 import json
 import threading
+import signal
+import fcntl
+import secrets
+import string
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response, stream_with_context
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -20,26 +24,38 @@ SECRET_KEY_PATH = os.environ.get("SECRET_KEY_PATH", "/etc/strongswan-panel/secre
 SERVER_DOMAIN = os.environ.get("SERVER_DOMAIN", "faghir.seytann.com")
 PANEL_PORT = int(os.environ.get("PANEL_PORT", 8000))
 
+def generate_random_pwd(length=8):
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
 def get_persistent_secret_key():
-    os.makedirs(os.path.dirname(SECRET_KEY_PATH), exist_ok=True)
-    if os.path.exists(SECRET_KEY_PATH):
-        try:
-            with open(SECRET_KEY_PATH, "rb") as f:
-                key = f.read()
-                if len(key) >= 16:
-                    return key
-        except Exception:
-            pass
+    candidates = [
+        SECRET_KEY_PATH,
+        os.path.join(BASE_DIR, ".secret.key")
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                with open(path, "rb") as f:
+                    key = f.read()
+                    if len(key) >= 16:
+                        return key
+            except Exception:
+                pass
+
     new_key = os.urandom(32)
-    try:
-        with open(SECRET_KEY_PATH, "wb") as f:
-            f.write(new_key)
-        os.chmod(SECRET_KEY_PATH, 0o600)
-    except Exception as e:
-        print(f"[!] Warning: Could not save secret.key: {e}", file=sys.stderr)
+    for path in candidates:
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(new_key)
+            os.chmod(path, 0o600)
+            return new_key
+        except Exception:
+            continue
     return new_key
 
-APP_VERSION = "1.0.2"
+APP_VERSION = "1.0.5"
 
 app = Flask(
     __name__,
@@ -52,9 +68,24 @@ app.config["PERMANENT_SESSION_LIFETIME"] = datetime.timedelta(days=30)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
+# Graceful shutdown flag
+shutdown_event = threading.Event()
+
+def signal_handler(signum, frame):
+    shutdown_event.set()
+
+try:
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+except Exception:
+    pass
+
 @app.context_processor
 def inject_globals():
-    return dict(app_version=APP_VERSION)
+    return dict(
+        app_version=APP_VERSION,
+        current_admin=session.get("admin_user", "")
+    )
 
 prev_cpu_times = None
 prev_net_bytes = None
@@ -158,9 +189,12 @@ def get_system_metrics():
 get_system_metrics()
 
 def get_db():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
+    conn = sqlite3.connect(DB_PATH, timeout=30.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA busy_timeout=30000;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
     return conn
 
 def get_db_usernames():
@@ -183,10 +217,16 @@ def init_db():
         CREATE TABLE IF NOT EXISTS admin (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL
+            password_hash TEXT NOT NULL,
+            created_at TEXT
         )
         """)
         
+        try:
+            cursor.execute("ALTER TABLE admin ADD COLUMN created_at TEXT")
+        except Exception:
+            pass
+
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -210,58 +250,68 @@ def init_db():
         cursor.execute("SELECT * FROM admin WHERE username = 'admin'")
         if not cursor.fetchone():
             default_hash = generate_password_hash("admin123")
-            cursor.execute("INSERT INTO admin (username, password_hash) VALUES ('admin', ?)", (default_hash,))
-            
-        cursor.execute("SELECT * FROM users WHERE username = 'mehran'")
-        if not cursor.fetchone():
             now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cursor.execute("INSERT INTO admin (username, password_hash, created_at) VALUES ('admin', ?, ?)", (default_hash, now))
+            
+        cursor.execute("SELECT COUNT(*) as cnt FROM users")
+        if cursor.fetchone()["cnt"] == 0:
+            now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            default_user_pass = generate_random_pwd(8)
             cursor.execute("""
                 INSERT INTO users (username, password, max_traffic_gb, used_traffic_bytes, created_at, expire_date, is_active, note, last_online_at)
-                VALUES ('mehran', '12345678', 0, 0, ?, NULL, 1, 'Default Admin VPN User', NULL)
-            """, (now,))
+                VALUES ('user1', ?, 0, 0, ?, NULL, 1, 'Default VPN User', NULL)
+            """, (default_user_pass, now))
             
         conn.commit()
         conn.close()
     except Exception as e:
         print(f"[!] Error in init_db: {e}", file=sys.stderr)
 
-def sync_ipsec_secrets():
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT username, password, max_traffic_gb, used_traffic_bytes, expire_date, is_active FROM users")
-        users = cursor.fetchall()
-        conn.close()
-        
-        now = datetime.datetime.now()
-        active_lines = [": RSA privkey.pem"]
-        
-        for u in users:
-            is_active = u["is_active"] if u["is_active"] is not None else 1
-            if u["expire_date"]:
-                try:
-                    exp_dt = datetime.datetime.strptime(u["expire_date"], "%Y-%m-%d %H:%M:%S")
-                    if now > exp_dt:
-                        is_active = 0
-                except Exception:
-                    pass
-            if u["max_traffic_gb"] and u["max_traffic_gb"] > 0:
-                max_bytes = u["max_traffic_gb"] * 1024 * 1024 * 1024
-                if (u["used_traffic_bytes"] or 0) >= max_bytes:
-                    is_active = 0
-                    
-            if is_active == 1:
-                active_lines.append(f'{u["username"]} : EAP "{u["password"]}"')
-                
-        with open(SECRETS_PATH, "w") as f:
-            f.write("\n".join(active_lines) + "\n")
-        os.chmod(SECRETS_PATH, 0o600)
-        
-        subprocess.run(["ipsec", "rereadsecrets"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except Exception as e:
-        print(f"[!] Error syncing ipsec.secrets: {e}", file=sys.stderr)
+sync_lock = threading.Lock()
 
-def get_online_users():
+def sync_ipsec_secrets():
+    with sync_lock:
+        try:
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute("SELECT username, password, max_traffic_gb, used_traffic_bytes, expire_date, is_active FROM users")
+            users = cursor.fetchall()
+            conn.close()
+            
+            now = datetime.datetime.now()
+            active_lines = [": RSA privkey.pem"]
+            
+            for u in users:
+                is_active = u["is_active"] if u["is_active"] is not None else 1
+                if u["expire_date"]:
+                    try:
+                        exp_dt = datetime.datetime.strptime(u["expire_date"], "%Y-%m-%d %H:%M:%S")
+                        if now > exp_dt:
+                            is_active = 0
+                    except Exception:
+                        pass
+                if u["max_traffic_gb"] and u["max_traffic_gb"] > 0:
+                    max_bytes = u["max_traffic_gb"] * 1024 * 1024 * 1024
+                    if (u["used_traffic_bytes"] or 0) >= max_bytes:
+                        is_active = 0
+                        
+                if is_active == 1:
+                    active_lines.append(f'{u["username"]} : EAP "{u["password"]}"')
+                    
+            os.makedirs(os.path.dirname(os.path.abspath(SECRETS_PATH)), exist_ok=True)
+            with open(SECRETS_PATH, "w") as f:
+                f.write("\n".join(active_lines) + "\n")
+            os.chmod(SECRETS_PATH, 0o600)
+            
+            subprocess.run(["ipsec", "rereadsecrets"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            print(f"[!] Error syncing ipsec.secrets: {e}", file=sys.stderr)
+
+cached_online_users = {}
+cached_online_time = 0
+online_cache_lock = threading.Lock()
+
+def fetch_online_users_raw():
     online = {}
     db_users = get_db_usernames()
     
@@ -319,13 +369,26 @@ def get_online_users():
         print(f"[!] Error parsing ipsec statusall: {e}", file=sys.stderr)
     return online
 
+def get_online_users(ttl=1.5):
+    global cached_online_users, cached_online_time
+    now = time.time()
+    with online_cache_lock:
+        if (now - cached_online_time) < ttl and cached_online_users:
+            return cached_online_users
+            
+    fresh_online = fetch_online_users_raw()
+    with online_cache_lock:
+        cached_online_users = fresh_online
+        cached_online_time = now
+    return fresh_online
+
 last_seen_bytes = {}
 
 def accounting_daemon():
     global last_seen_bytes
-    while True:
+    while not shutdown_event.is_set():
         try:
-            online = get_online_users()
+            online = fetch_online_users_raw()
             now = datetime.datetime.now()
             now_str = now.strftime("%Y-%m-%d %H:%M:%S")
             
@@ -394,12 +457,32 @@ def accounting_daemon():
         except Exception as e:
             print(f"[!] Daemon exception: {e}", file=sys.stderr)
             
-        time.sleep(5)
+        if shutdown_event.wait(5):
+            break
+
+daemon_lock_handle = None
+
+def start_accounting_daemon():
+    global daemon_lock_handle
+    lock_file = "/tmp/ike_accounting_daemon.lock"
+    try:
+        daemon_lock_handle = open(lock_file, "w")
+        fcntl.flock(daemon_lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (IOError, BlockingIOError, PermissionError):
+        # Another process holds the lock; do not start duplicate daemon
+        return
+    
+    t = threading.Thread(target=accounting_daemon, daemon=True)
+    t.start()
 
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not session.get("logged_in"):
+        admin_user = session.get("admin_user")
+        if not session.get("logged_in") or not admin_user:
+            is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.accept_mimetypes.best == "application/json"
+            if is_ajax:
+                return jsonify({"success": False, "error": "Unauthorized or session expired", "redirect": url_for("login")}), 401
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated_function
@@ -495,7 +578,7 @@ def get_remaining_days_filter(expire_date_str):
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if session.get("logged_in"):
+    if session.get("logged_in") and session.get("admin_user"):
         return redirect(url_for("dashboard"))
     if request.method == "POST":
         username = request.form.get("username", "").strip()
@@ -511,7 +594,8 @@ def login():
             if admin and check_password_hash(admin["password_hash"], password):
                 session.permanent = True
                 session["logged_in"] = True
-                session["admin_user"] = username
+                session["admin_id"] = admin["id"]
+                session["admin_user"] = admin["username"]
                 return redirect(url_for("dashboard"))
             else:
                 flash("Invalid username or password!", "danger")
@@ -560,7 +644,7 @@ def dashboard():
 @login_required
 def sse_stream():
     def event_generator():
-        while True:
+        while not shutdown_event.is_set():
             try:
                 online = get_online_users()
                 conn = get_db()
@@ -617,7 +701,8 @@ def sse_stream():
             except Exception as e:
                 print(f"[!] Error in SSE generator: {e}", file=sys.stderr)
                 
-            time.sleep(2)
+            if shutdown_event.wait(2):
+                break
 
     response = Response(stream_with_context(event_generator()), mimetype="text/event-stream")
     response.headers["Cache-Control"] = "no-cache"
@@ -846,6 +931,8 @@ def delete_user(user_id):
         conn.close()
     return redirect(url_for("dashboard"))
 
+# ================= Admin Management Routes =================
+
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
@@ -868,18 +955,117 @@ def settings():
             cursor.execute("UPDATE admin SET password_hash = ? WHERE id = ?", (new_hash, admin["id"]))
             conn.commit()
             conn.close()
-            flash("Admin password updated successfully!", "success")
+            flash("Password updated successfully!", "success")
         else:
             conn.close()
             flash("Current password is incorrect!", "danger")
-            
-    return render_template("settings.html")
+        return redirect(url_for("settings"))
+        
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, created_at FROM admin ORDER BY id ASC")
+    admins = [dict(a) for a in cursor.fetchall()]
+    conn.close()
+    
+    return render_template("settings.html", admins=admins)
 
+@app.route("/admin/add", methods=["POST"])
+@login_required
+def add_admin():
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "").strip()
+    confirm = request.form.get("confirm_password", "").strip()
+    
+    if not username or not password:
+        flash("Username and password are required!", "danger")
+        return redirect(url_for("settings"))
+        
+    if password != confirm:
+        flash("Passwords do not match!", "danger")
+        return redirect(url_for("settings"))
+        
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("INSERT INTO admin (username, password_hash, created_at) VALUES (?, ?, ?)", 
+                       (username, generate_password_hash(password), now))
+        conn.commit()
+        conn.close()
+        flash(f"Administrator '{username}' created successfully!", "success")
+    except sqlite3.IntegrityError:
+        flash(f"Administrator with username '{username}' already exists!", "danger")
+    except Exception as e:
+        flash(f"Error creating admin: {e}", "danger")
+        
+    return redirect(url_for("settings"))
+
+@app.route("/admin/edit-password/<int:admin_id>", methods=["POST"])
+@login_required
+def edit_admin_password(admin_id):
+    new_password = request.form.get("new_password", "").strip()
+    confirm = request.form.get("confirm_password", "").strip()
+    
+    if not new_password or new_password != confirm:
+        flash("Passwords are empty or do not match!", "danger")
+        return redirect(url_for("settings"))
+        
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM admin WHERE id = ?", (admin_id,))
+    target_admin = cursor.fetchone()
+    
+    if not target_admin:
+        conn.close()
+        flash("Administrator not found!", "danger")
+        return redirect(url_for("settings"))
+        
+    cursor.execute("UPDATE admin SET password_hash = ? WHERE id = ?", (generate_password_hash(new_password), admin_id))
+    conn.commit()
+    conn.close()
+    
+    flash(f"Password updated for administrator '{target_admin['username']}'!", "success")
+    return redirect(url_for("settings"))
+
+@app.route("/admin/delete/<int:admin_id>", methods=["POST"])
+@login_required
+def delete_admin(admin_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) as cnt FROM admin")
+    total_admins = cursor.fetchone()["cnt"]
+    
+    if total_admins <= 1:
+        conn.close()
+        flash("Cannot delete the only remaining administrator!", "danger")
+        return redirect(url_for("settings"))
+        
+    cursor.execute("SELECT * FROM admin WHERE id = ?", (admin_id,))
+    target_admin = cursor.fetchone()
+    
+    if not target_admin:
+        conn.close()
+        flash("Administrator not found!", "danger")
+        return redirect(url_for("settings"))
+        
+    is_self = (target_admin["username"] == session.get("admin_user"))
+    
+    cursor.execute("DELETE FROM admin WHERE id = ?", (admin_id,))
+    conn.commit()
+    conn.close()
+    
+    if is_self:
+        session.clear()
+        flash("Your administrator account has been deleted.", "info")
+        return redirect(url_for("login"))
+        
+    flash(f"Administrator '{target_admin['username']}' deleted successfully.", "warning")
+    return redirect(url_for("settings"))
+
+# Initialize DB and run daemon
 init_db()
 sync_ipsec_secrets()
-
-daemon_thread = threading.Thread(target=accounting_daemon, daemon=True)
-daemon_thread.start()
+start_accounting_daemon()
 
 if __name__ == "__main__":
     print(f"[*] Starting IKE-UI Panel on 0.0.0.0:{PANEL_PORT}...")

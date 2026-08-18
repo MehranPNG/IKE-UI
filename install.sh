@@ -7,7 +7,7 @@ set -e
 # ==============================================================================
 
 REPO_URL="https://github.com/MehranPNG/IKE-UI.git"
-APP_VERSION="1.0.2"
+APP_VERSION="1.0.5"
 INSTALL_DIR="/opt/ike-ui"
 PANEL_DIR="${INSTALL_DIR}/panel"
 DB_DIR="/etc/strongswan-panel"
@@ -282,7 +282,6 @@ CONF_EOF
     if [ ! -f "${SECRETS_PATH}" ]; then
         cat > "${SECRETS_PATH}" << 'SEC_EOF'
 : RSA privkey.pem
-mehran : EAP "12345678"
 SEC_EOF
         chmod 600 "${SECRETS_PATH}"
     fi
@@ -320,7 +319,7 @@ RULES_EOF
     "${INSTALL_DIR}/venv/bin/pip" install -r "${INSTALL_DIR}/panel/requirements.txt" >/dev/null
 
     SERVER_DOMAIN="${DOMAIN}" DB_PATH="${DB_PATH}" SECRETS_PATH="${SECRETS_PATH}" SECRET_KEY_PATH="${SECRET_KEY_PATH}" \
-    "${INSTALL_DIR}/venv/bin/python" -c "
+    VPN_USER_INFO=$("${INSTALL_DIR}/venv/bin/python" -c "
 import sys
 sys.path.insert(0, '${INSTALL_DIR}/panel')
 import app
@@ -335,8 +334,19 @@ if row:
 else:
     cursor.execute('INSERT INTO admin (username, password_hash) VALUES (?, ?)', ('${ADMIN_USER}', generate_password_hash('${ADMIN_PASS}')))
 conn.commit()
+
+cursor.execute('SELECT username, password FROM users ORDER BY id ASC LIMIT 1')
+u = cursor.fetchone()
 conn.close()
-"
+app.sync_ipsec_secrets()
+if u:
+    print(f'{u[\"username\"]}:{u[\"password\"]}')
+else:
+    print('user1:Generated')
+" 2>/dev/null || echo "user1:Generated")
+
+    DEFAULT_VPN_USER=$(echo "$VPN_USER_INFO" | cut -d: -f1)
+    DEFAULT_VPN_PASS=$(echo "$VPN_USER_INFO" | cut -d: -f2)
 
     cat > /etc/systemd/system/ike-ui.service << SERVICE_EOF
 [Unit]
@@ -351,9 +361,10 @@ Environment="SERVER_DOMAIN=${DOMAIN}"
 Environment="DB_PATH=${DB_PATH}"
 Environment="SECRETS_PATH=${SECRETS_PATH}"
 Environment="SECRET_KEY_PATH=${SECRET_KEY_PATH}"
-ExecStart=${INSTALL_DIR}/venv/bin/gunicorn --workers 2 --threads 8 --worker-class gthread --worker-connections 1000 -b 127.0.0.1:8000 app:app
+ExecStart=${INSTALL_DIR}/venv/bin/gunicorn --workers 2 --threads 8 --worker-class gthread --worker-connections 1000 --timeout 30 --graceful-timeout 2 -b 127.0.0.1:8000 app:app
 Restart=always
 RestartSec=3
+TimeoutStopSec=5s
 
 [Install]
 WantedBy=multi-user.target
@@ -423,8 +434,8 @@ NGINX_EOF
     echo -e "     • Password:  ${BOLD}${ADMIN_PASS}${NC}"
     echo ""
     echo -e "  ${BOLD}Default VPN User:${NC}"
-    echo -e "     • Username:  ${BOLD}mehran${NC}"
-    echo -e "     • Password:  ${BOLD}12345678${NC}"
+    echo -e "     • Username:  ${BOLD}${DEFAULT_VPN_USER}${NC}"
+    echo -e "     • Password:  ${BOLD}${DEFAULT_VPN_PASS}${NC}"
     echo ""
     echo -e "${CYAN}====================================================================${NC}"
     echo -e "${YELLOW}Zero-Cert Setup: No certificates or profiles needed on clients.${NC}"
@@ -470,8 +481,7 @@ update_ike_ui() {
     if [ ! -d "${INSTALL_DIR}/venv" ]; then
         python3 -m venv "${INSTALL_DIR}/venv"
     fi
-    "${INSTALL_DIR}/venv/bin/pip" install --upgrade pip >/dev/null
-    "${INSTALL_DIR}/venv/bin/pip" install -r "${INSTALL_DIR}/panel/requirements.txt" >/dev/null
+    "${INSTALL_DIR}/venv/bin/pip" install --disable-pip-version-check --no-cache-dir -r "${INSTALL_DIR}/panel/requirements.txt" >/dev/null
     echo -e "${GREEN}[+] Python dependencies updated.${NC}"
 
     echo -e "${CYAN}[3/4] Running database migrations...${NC}"
@@ -485,7 +495,10 @@ app.init_db()
 
     echo -e "${CYAN}[4/4] Restarting IKE-UI panel service...${NC}"
     if [ -f /etc/systemd/system/ike-ui.service ]; then
-        sed -i 's|gunicorn -w [0-9]\+|gunicorn --workers 2 --threads 8 --worker-class gthread --worker-connections 1000|g' /etc/systemd/system/ike-ui.service
+        sed -i 's|gunicorn .* app:app|gunicorn --workers 2 --threads 8 --worker-class gthread --worker-connections 1000 --timeout 30 --graceful-timeout 2 -b 127.0.0.1:8000 app:app|g' /etc/systemd/system/ike-ui.service
+        if ! grep -q "TimeoutStopSec=" /etc/systemd/system/ike-ui.service; then
+            sed -i '/RestartSec=/a TimeoutStopSec=5s' /etc/systemd/system/ike-ui.service
+        fi
     fi
     systemctl daemon-reload
     systemctl restart ike-ui.service
@@ -561,7 +574,24 @@ view_logs() {
 }
 
 reset_admin_credentials() {
-    read -rp "Enter Admin Username [default: admin]: " NEW_USER
+    show_banner
+    echo -e "${BOLD}Administrator Credentials Manager${NC}"
+    echo ""
+    echo -e "${CYAN}[*] Existing Administrators:${NC}"
+    "${INSTALL_DIR}/venv/bin/python" -c "
+import sys
+sys.path.insert(0, '${INSTALL_DIR}/panel')
+import app
+conn = app.get_db()
+cursor = conn.cursor()
+cursor.execute('SELECT id, username FROM admin ORDER BY id ASC')
+rows = cursor.fetchall()
+conn.close()
+for r in rows:
+    print(f'   • {r[\"username\"]} (ID: {r[\"id\"]})')
+" 2>/dev/null || true
+    echo ""
+    read -rp "Enter Admin Username to add/reset [default: admin]: " NEW_USER
     NEW_USER=${NEW_USER:-admin}
 
     read -rp "Enter new Admin Password: " NEW_PASS
@@ -573,18 +603,20 @@ reset_admin_credentials() {
 import sys
 sys.path.insert(0, '${INSTALL_DIR}/panel')
 import app
+import datetime
 from werkzeug.security import generate_password_hash
 conn = app.get_db()
 cursor = conn.cursor()
-cursor.execute('SELECT id FROM admin LIMIT 1')
+cursor.execute('SELECT id FROM admin WHERE username = ?', ('${NEW_USER}',))
 row = cursor.fetchone()
 if row:
-    cursor.execute('UPDATE admin SET username = ?, password_hash = ? WHERE id = ?', ('${NEW_USER}', generate_password_hash('${NEW_PASS}'), row['id']))
+    cursor.execute('UPDATE admin SET password_hash = ? WHERE id = ?', (generate_password_hash('${NEW_PASS}'), row['id']))
 else:
-    cursor.execute('INSERT INTO admin (username, password_hash) VALUES (?, ?)', ('${NEW_USER}', generate_password_hash('${NEW_PASS}')))
+    now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    cursor.execute('INSERT INTO admin (username, password_hash, created_at) VALUES (?, ?, ?)', ('${NEW_USER}', generate_password_hash('${NEW_PASS}'), now))
 conn.commit()
 conn.close()
-print('[+] Admin credentials updated successfully.')
+print('[+] Administrator credentials for \'${NEW_USER}\' updated successfully.')
 "
 }
 
