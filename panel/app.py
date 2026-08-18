@@ -343,7 +343,7 @@ def disconnect_user_sas(username, online_dict=None):
         print(f"[!] Error disconnecting SAs for {username}: {e}", file=sys.stderr)
 
 def disconnect_excess_sas(username, max_devices, online_dict=None):
-    """Disconnect newly connected excess SAs if a user exceeds max_devices, keeping existing connections."""
+    """Disconnect oldest excess SAs if a user has more connections than max_devices."""
     if not username:
         return
     try:
@@ -358,8 +358,8 @@ def disconnect_excess_sas(username, max_devices, online_dict=None):
                     sorted_sas = sorted(sa_ids, key=lambda x: int(x) if str(x).isdigit() else str(x))
                 except Exception:
                     sorted_sas = list(sa_ids)
-                # Keep the first max_dev connections (established earlier), reject/disconnect the new ones
-                excess_sas = sorted_sas[max_dev:]
+                excess_count = len(sorted_sas) - max_dev
+                excess_sas = sorted_sas[:excess_count]
                 for sa_id in excess_sas:
                     if sa_id:
                         subprocess.run(["ipsec", "down", f"ikev2-vpn[{sa_id}]"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
