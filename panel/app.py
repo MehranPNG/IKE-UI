@@ -54,7 +54,7 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.0.10"
+APP_VERSION = "1.1.0"
 
 app = Flask(
     __name__,
@@ -806,6 +806,41 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
+def format_user_payload(u, online):
+    uname = u.get("username") if isinstance(u, dict) else u["username"]
+    is_on = uname in online
+    online_info = online.get(uname, {})
+    dev_cnt = online_info.get("device_count", 1) if is_on else 0
+    last_seen_raw = u.get("last_online_at") if isinstance(u, dict) else u["last_online_at"]
+    last_seen_formatted = format_last_online_str(last_seen_raw)
+    used_bytes = (u.get("used_traffic_bytes") if isinstance(u, dict) else u["used_traffic_bytes"]) or 0
+    max_gb = (u.get("max_traffic_gb") if isinstance(u, dict) else u["max_traffic_gb"]) or 0
+    exp_date = (u.get("expire_date") if isinstance(u, dict) else u["expire_date"]) or ""
+    is_act = u.get("is_active") if isinstance(u, dict) else u["is_active"]
+    is_act = 1 if is_act is None else int(is_act)
+    note = (u.get("note") if isinstance(u, dict) else u["note"]) or ""
+    u_id = u.get("id") if isinstance(u, dict) else u["id"]
+    u_pwd = u.get("password") if isinstance(u, dict) else u["password"]
+    
+    return {
+        "id": u_id,
+        "username": uname,
+        "password": u_pwd,
+        "is_online": is_on,
+        "device_count": dev_cnt,
+        "last_online_at": last_seen_raw or "",
+        "last_seen_formatted": last_seen_formatted or "",
+        "used_traffic_bytes": used_bytes,
+        "used_traffic_formatted": format_bytes_val(used_bytes),
+        "max_traffic_gb": max_gb,
+        "traffic_percent": traffic_percent(used_bytes, max_gb),
+        "expire_date": exp_date,
+        "remaining_days": calc_remaining_days(exp_date),
+        "time_remaining": time_remaining(exp_date),
+        "is_active": is_act,
+        "note": note
+    }
+
 @app.route("/")
 @login_required
 def dashboard():
@@ -826,9 +861,11 @@ def dashboard():
     online_count = sum(1 for u in users if u["username"] in online)
     total_traffic_bytes = sum((u["used_traffic_bytes"] or 0) for u in users)
     sys_metrics = get_system_metrics()
+    users_formatted = [format_user_payload(u, online) for u in users]
     
     return render_template("dashboard.html", 
                            users=users, 
+                           users_json=json.dumps(users_formatted),
                            online=online,
                            total_users=total_users,
                            active_users=active_users,
@@ -856,30 +893,7 @@ def sse_stream():
                 total_traffic_bytes = sum((u.get("used_traffic_bytes") or 0) for u in users)
                 sys_metrics = get_system_metrics()
 
-                user_list = []
-                for u in users:
-                    is_on = u["username"] in online
-                    online_info = online.get(u["username"], {})
-                    dev_cnt = online_info.get("device_count", 1) if is_on else 0
-                    last_seen_formatted = format_last_online_str(u.get("last_online_at"))
-                    
-                    user_list.append({
-                        "id": u["id"],
-                        "username": u["username"],
-                        "is_online": is_on,
-                        "device_count": dev_cnt,
-                        "last_online_at": u.get("last_online_at"),
-                        "last_seen_formatted": last_seen_formatted,
-                        "used_traffic_bytes": u.get("used_traffic_bytes") or 0,
-                        "used_traffic_formatted": format_bytes_val(u.get("used_traffic_bytes") or 0),
-                        "max_traffic_gb": u.get("max_traffic_gb") or 0,
-                        "traffic_percent": traffic_percent(u.get("used_traffic_bytes") or 0, u.get("max_traffic_gb")),
-                        "expire_date": u.get("expire_date") or "",
-                        "remaining_days": calc_remaining_days(u.get("expire_date")),
-                        "time_remaining": time_remaining(u.get("expire_date")),
-                        "is_active": u.get("is_active") if u.get("is_active") is not None else 1,
-                        "note": u.get("note") or ""
-                    })
+                user_list = [format_user_payload(u, online) for u in users]
 
                 payload = {
                     "stats": {

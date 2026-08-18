@@ -217,11 +217,46 @@
                     <table class="table" id="usersTable">
                         <thead>
                             <tr>
-                                <th>User</th>
-                                <th>Live Status</th>
-                                <th>Data Quota</th>
-                                <th>Expiration</th>
-                                <th>Account Status</th>
+                                <th class="th-sortable" id="th-username" onclick="handleSort('username')" title="Sort by Username">
+                                    <div class="th-content">
+                                        <span>User</span>
+                                        <span class="sort-icon" id="sort-icon-username">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5-5"/></svg>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="th-sortable" id="th-live_status" onclick="handleSort('live_status')" title="Sort by Live Status">
+                                    <div class="th-content">
+                                        <span>Live Status</span>
+                                        <span class="sort-icon" id="sort-icon-live_status">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5-5"/></svg>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="th-sortable" id="th-traffic" onclick="handleSort('traffic')" title="Sort by Data Quota">
+                                    <div class="th-content">
+                                        <span>Data Quota</span>
+                                        <span class="sort-icon" id="sort-icon-traffic">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5-5"/></svg>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="th-sortable" id="th-expiration" onclick="handleSort('expiration')" title="Sort by Expiration">
+                                    <div class="th-content">
+                                        <span>Expiration</span>
+                                        <span class="sort-icon" id="sort-icon-expiration">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5-5"/></svg>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="th-sortable" id="th-account_status" onclick="handleSort('account_status')" title="Sort by Account Status">
+                                    <div class="th-content">
+                                        <span>Account Status</span>
+                                        <span class="sort-icon" id="sort-icon-account_status">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5-5"/></svg>
+                                        </span>
+                                    </div>
+                                </th>
                                 <th class="text-right">Actions</th>
                             </tr>
                         </thead>
@@ -232,7 +267,6 @@
                             <tr id="user-row-{{ u.id }}" class="user-table-row" data-username="{{ u.username | lower }}" data-note="{{ (u.note or '') | lower }}">
                                 <td>
                                     <div class="user-cell">
-                                        <div class="user-avatar">{{ u.username[:2].upper() }}</div>
                                         <div class="user-meta">
                                             <span class="user-name">{{ u.username }}</span>
                                             {% if u.note %}<span class="user-note">{{ u.note }}</span>{% endif %}
@@ -242,7 +276,7 @@
                                 <td id="user-online-{{ u.id }}">
                                     {% if is_online %}
                                         {% set dev_cnt = online_data.get('device_count', 1) %}
-                                        <span class="badge-online">{{ dev_cnt }} Online</span>
+                                        <span class="badge badge-online">{{ dev_cnt }} Online</span>
                                     {% else %}
                                         <span class="badge badge-neutral">Offline</span>
                                         {% set last_seen = u.last_online_at | format_last_seen %}
@@ -303,6 +337,23 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Table Pagination Footer -->
+                <div class="table-pagination" id="usersPagination">
+                    <div class="pagination-left">
+                        <span class="pagination-info" id="paginationInfo">Showing 0 of 0 users</span>
+                        <div class="per-page-wrap">
+                            <span>Show</span>
+                            <select class="per-page-select" id="perPageSelect" onchange="changePerPage(this.value)" aria-label="Users per page">
+                                <option value="10">10</option>
+                                <option value="30">30</option>
+                                <option value="50">50</option>
+                            </select>
+                            <span>per page</span>
+                        </div>
+                    </div>
+                    <div class="pagination-controls" id="paginationControls"></div>
                 </div>
             </div>
         </main>
@@ -849,6 +900,355 @@
             });
         }
 
+        // State Management
+        let allUsers = {{ users_json | safe }};
+        let currentSortColumn = null; // 'username', 'live_status', 'traffic', 'expiration', 'account_status'
+        let currentSortDirection = 'none'; // 'none', 'asc', 'desc'
+        let currentPage = 1;
+        let perPage = 10;
+        let searchQuery = '';
+
+        const sortColumns = ['username', 'live_status', 'traffic', 'expiration', 'account_status'];
+
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Cookie Management
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+
+        function setCookie(name, val, days = 365) {
+            const d = new Date();
+            d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+            document.cookie = `${name}=${val};path=/;max-age=${days * 86400};SameSite=Lax`;
+            try {
+                localStorage.setItem(name, val);
+            } catch(e) {}
+        }
+
+        function initPerPage() {
+            let saved = getCookie('ike_users_per_page');
+            if (!saved) {
+                try { saved = localStorage.getItem('ike_users_per_page'); } catch(e) {}
+            }
+            const val = parseInt(saved);
+            if ([10, 30, 50].includes(val)) {
+                perPage = val;
+            } else {
+                perPage = 10;
+            }
+            const sel = document.getElementById('perPageSelect');
+            if (sel) sel.value = String(perPage);
+        }
+
+        function changePerPage(val) {
+            perPage = parseInt(val) || 10;
+            setCookie('ike_users_per_page', perPage);
+            currentPage = 1;
+            renderUsersTable();
+        }
+
+        // Sorting System
+        function handleSort(col) {
+            if (currentSortColumn !== col) {
+                currentSortColumn = col;
+                currentSortDirection = 'asc';
+            } else {
+                if (currentSortDirection === 'asc') {
+                    currentSortDirection = 'desc';
+                } else if (currentSortDirection === 'desc') {
+                    currentSortDirection = 'none';
+                    currentSortColumn = null;
+                } else {
+                    currentSortDirection = 'asc';
+                }
+            }
+            currentPage = 1;
+            renderUsersTable();
+        }
+
+        function updateSortIcons() {
+            const iconUnsorted = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5-5"/></svg>`;
+            const iconAsc = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
+            const iconDesc = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>`;
+
+            sortColumns.forEach(col => {
+                const th = document.getElementById('th-' + col);
+                const iconEl = document.getElementById('sort-icon-' + col);
+                if (!th || !iconEl) return;
+
+                th.classList.remove('sorted-asc', 'sorted-desc');
+                if (currentSortColumn === col && currentSortDirection === 'asc') {
+                    th.classList.add('sorted-asc');
+                    iconEl.innerHTML = iconAsc;
+                } else if (currentSortColumn === col && currentSortDirection === 'desc') {
+                    th.classList.add('sorted-desc');
+                    iconEl.innerHTML = iconDesc;
+                } else {
+                    iconEl.innerHTML = iconUnsorted;
+                }
+            });
+        }
+
+        function compareUsers(a, b, col, dir) {
+            let res = 0;
+            if (col === 'username') {
+                const nameA = (a.username || '').toLowerCase();
+                const nameB = (b.username || '').toLowerCase();
+                res = nameA.localeCompare(nameB);
+            } else if (col === 'live_status') {
+                const onA = a.is_online ? 1 : 0;
+                const onB = b.is_online ? 1 : 0;
+                if (onA !== onB) {
+                    res = onB - onA; // Online (1) before Offline (0)
+                } else if (onA === 1) {
+                    res = (b.device_count || 1) - (a.device_count || 1);
+                } else {
+                    const timeA = a.last_online_at ? (Date.parse(a.last_online_at) || 0) : 0;
+                    const timeB = b.last_online_at ? (Date.parse(b.last_online_at) || 0) : 0;
+                    res = timeB - timeA;
+                }
+            } else if (col === 'traffic') {
+                const bytesA = Number(a.used_traffic_bytes) || 0;
+                const bytesB = Number(b.used_traffic_bytes) || 0;
+                res = bytesB - bytesA; // Highest consumption first in asc
+            } else if (col === 'expiration') {
+                const parseExp = (u) => {
+                    if (!u.expire_date) return Infinity;
+                    const t = Date.parse(u.expire_date);
+                    return isNaN(t) ? Infinity : t;
+                };
+                const expA = parseExp(a);
+                const expB = parseExp(b);
+                res = expA - expB; // Expiring soonest first in asc
+            } else if (col === 'account_status') {
+                const actA = (a.is_active === 1) ? 1 : 0;
+                const actB = (b.is_active === 1) ? 1 : 0;
+                res = actB - actA; // Active first in asc
+            }
+
+            return dir === 'desc' ? -res : res;
+        }
+
+        function getFilteredAndSortedUsers() {
+            let list = [...allUsers];
+
+            if (searchQuery) {
+                const q = searchQuery.toLowerCase().trim();
+                list = list.filter(u => {
+                    const uname = (u.username || '').toLowerCase();
+                    const note = (u.note || '').toLowerCase();
+                    return uname.includes(q) || note.includes(q);
+                });
+            }
+
+            if (currentSortColumn && currentSortDirection !== 'none') {
+                list.sort((a, b) => compareUsers(a, b, currentSortColumn, currentSortDirection));
+            }
+
+            return list;
+        }
+
+        function filterUsersTable() {
+            const input = document.getElementById('userSearchInput');
+            searchQuery = input ? input.value : '';
+            currentPage = 1;
+            renderUsersTable();
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            renderUsersTable();
+        }
+
+        function getPageNumbers(curr, total) {
+            if (total <= 7) {
+                return Array.from({length: total}, (_, i) => i + 1);
+            }
+            if (curr <= 4) {
+                return [1, 2, 3, 4, 5, '...', total];
+            }
+            if (curr >= total - 3) {
+                return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+            }
+            return [1, '...', curr - 1, curr, curr + 1, '...', total];
+        }
+
+        function renderPaginationControls(totalItems, totalPages, startIndex, endIndex) {
+            const infoEl = document.getElementById('paginationInfo');
+            const controlsEl = document.getElementById('paginationControls');
+
+            if (infoEl) {
+                if (totalItems === 0) {
+                    infoEl.innerHTML = `Showing <strong>0</strong> of <strong>0</strong> users`;
+                } else {
+                    infoEl.innerHTML = `Showing <strong>${startIndex + 1}-${endIndex}</strong> of <strong>${totalItems}</strong> users`;
+                }
+            }
+
+            if (!controlsEl) return;
+
+            if (totalPages <= 1) {
+                controlsEl.innerHTML = `
+                    <button class="page-btn" disabled title="Previous Page">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <button class="page-btn active">1</button>
+                    <button class="page-btn" disabled title="Next Page">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                `;
+                return;
+            }
+
+            let html = '';
+
+            // Prev Button
+            const prevDisabled = currentPage === 1 ? 'disabled' : '';
+            html += `<button class="page-btn" ${prevDisabled} onclick="goToPage(${currentPage - 1})" title="Previous Page">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>`;
+
+            // Page numbers
+            const pageNumbers = getPageNumbers(currentPage, totalPages);
+            pageNumbers.forEach(p => {
+                if (p === '...') {
+                    html += `<span class="page-ellipsis">...</span>`;
+                } else {
+                    const isActive = p === currentPage ? 'active' : '';
+                    html += `<button class="page-btn ${isActive}" onclick="goToPage(${p})">${p}</button>`;
+                }
+            });
+
+            // Next Button
+            const nextDisabled = currentPage === totalPages ? 'disabled' : '';
+            html += `<button class="page-btn" ${nextDisabled} onclick="goToPage(${currentPage + 1})" title="Next Page">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>`;
+
+            controlsEl.innerHTML = html;
+        }
+
+        function renderUserRowHTML(u) {
+            const onlineHtml = u.is_online
+                ? `<span class="badge badge-online">${u.device_count || 1} Online</span>`
+                : `<span class="badge badge-neutral">Offline</span>${u.last_seen_formatted ? `<div class="sub-text">${escapeHtml(u.last_seen_formatted)}</div>` : ''}`;
+
+            const maxTrafText = (u.max_traffic_gb && u.max_traffic_gb > 0)
+                ? `${u.max_traffic_gb} GB`
+                : '∞ Unlimited';
+            const trafBarHtml = (u.max_traffic_gb && u.max_traffic_gb > 0)
+                ? `<div class="progress-track" id="user-traf-track-${u.id}"><div id="user-traf-bar-${u.id}" class="progress-bar ${u.traffic_percent > 90 ? 'progress-danger' : (u.traffic_percent > 70 ? 'progress-warning' : '')}" style="width: ${u.traffic_percent}%;"></div></div>`
+                : `<div class="progress-track" id="user-traf-track-${u.id}" style="display: none;"><div id="user-traf-bar-${u.id}" class="progress-bar" style="width: 0%;"></div></div>`;
+
+            const expTitle = u.expire_date ? u.time_remaining : '∞ Lifetime';
+            const expSub = u.expire_date ? `<span class="sub-text" id="user-exp-sub-${u.id}">${escapeHtml(u.expire_date.substring(0, 10))}</span>` : `<span class="sub-text" id="user-exp-sub-${u.id}"></span>`;
+            const statusClass = u.is_active === 1 ? 'status-active' : 'status-disabled';
+            const statusText = u.is_active === 1 ? 'Active' : 'Disabled';
+            const isChecked = u.is_active === 1 ? 'checked' : '';
+
+            return `
+                <td>
+                    <div class="user-cell">
+                        <div class="user-meta">
+                            <span class="user-name">${escapeHtml(u.username)}</span>
+                            ${u.note ? `<span class="user-note">${escapeHtml(u.note)}</span>` : ''}
+                        </div>
+                    </div>
+                </td>
+                <td id="user-online-${u.id}">${onlineHtml}</td>
+                <td>
+                    <div class="traffic-meter">
+                        <div class="meter-text">
+                            <span id="user-traf-used-${u.id}">${escapeHtml(u.used_traffic_formatted)}</span>
+                            <span class="meter-max" id="user-traf-max-${u.id}">/ ${maxTrafText}</span>
+                        </div>
+                        ${trafBarHtml}
+                    </div>
+                </td>
+                <td>
+                    <div class="expiration-cell">
+                        <span class="exp-title" id="user-exp-${u.id}">${escapeHtml(expTitle)}</span>
+                        ${expSub}
+                    </div>
+                </td>
+                <td>
+                    <span id="user-status-${u.id}" class="status-pill ${statusClass}">${statusText}</span>
+                </td>
+                <td class="text-right">
+                    <div class="action-buttons">
+                        <label class="switch-toggle" title="Toggle Active Status">
+                            <input type="checkbox" id="user-toggle-${u.id}" ${isChecked} onchange="toggleUser('${u.id}', this)">
+                            <span class="switch-slider"></span>
+                        </label>
+                        <button class="btn-icon btn-edit-user" id="user-edit-btn-${u.id}" onclick="openEditModal('${u.id}', '${escapeHtml(u.username)}', '${u.max_traffic_gb || ''}', '${u.remaining_days !== undefined ? u.remaining_days : ''}', '${escapeHtml(u.note || '')}')" title="Edit User">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                            </svg>
+                        </button>
+                        <button type="button" class="btn-icon text-danger" onclick="confirmDeleteUser('${u.id}', '${escapeHtml(u.username)}')" title="Delete User">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                        </button>
+                    </div>
+                </td>
+            `;
+        }
+
+        function renderUsersTable() {
+            const list = getFilteredAndSortedUsers();
+            const totalItems = list.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
+
+            if (currentPage > totalPages) {
+                currentPage = totalPages;
+            }
+            if (currentPage < 1) {
+                currentPage = 1;
+            }
+
+            const startIndex = (currentPage - 1) * perPage;
+            const endIndex = Math.min(startIndex + perPage, totalItems);
+            const currentRows = list.slice(startIndex, endIndex);
+
+            const tbody = document.getElementById('usersTableBody');
+            if (!tbody) return;
+
+            if (totalItems === 0) {
+                tbody.innerHTML = `
+                    <tr id="emptyRow">
+                        <td colspan="6" class="text-center empty-state">
+                            ${searchQuery ? 'No users matching your search.' : 'No users found. Click "Add New User" to create one.'}
+                        </td>
+                    </tr>
+                `;
+            } else {
+                let html = '';
+                currentRows.forEach(u => {
+                    html += `<tr id="user-row-${u.id}" class="user-table-row" data-username="${escapeHtml(u.username.toLowerCase())}" data-note="${escapeHtml((u.note || '').toLowerCase())}">
+                        ${renderUserRowHTML(u)}
+                    </tr>`;
+                });
+                tbody.innerHTML = html;
+            }
+
+            renderPaginationControls(totalItems, totalPages, startIndex, endIndex);
+            updateSortIcons();
+        }
+
         let lastCreatedPayload = null;
         async function submitAddUser(e) {
             e.preventDefault();
@@ -903,20 +1303,13 @@
                     document.getElementById('succTraffic').innerText = res.max_traffic;
                     document.getElementById('succExpire').innerText = res.expire;
 
-                    // Instantly render in table
-                    const tbody = document.getElementById('usersTableBody');
-                    const emptyRow = document.getElementById('emptyRow');
-                    if (emptyRow) emptyRow.remove();
-
-                    let existingRow = document.getElementById('user-row-' + res.user_id);
-                    if (existingRow) existingRow.remove();
-
                     const newUser = {
                         id: res.user_id,
                         username: res.username,
+                        password: res.password,
                         is_online: false,
                         device_count: 0,
-                        last_online_at: null,
+                        last_online_at: '',
                         last_seen_formatted: '',
                         used_traffic_bytes: 0,
                         used_traffic_formatted: '0 B',
@@ -929,20 +1322,14 @@
                         note: res.note || ''
                     };
 
-                    const newRow = document.createElement('tr');
-                    newRow.id = 'user-row-' + res.user_id;
-                    newRow.className = 'user-table-row';
-                    newRow.setAttribute('data-username', res.username.toLowerCase());
-                    newRow.setAttribute('data-note', (res.note || '').toLowerCase());
-                    newRow.innerHTML = renderUserRowHTML(newUser);
-                    tbody.insertBefore(newRow, tbody.firstChild);
+                    allUsers.unshift(newUser);
+                    currentPage = 1;
+                    renderUsersTable();
 
                     const elTotal = document.getElementById('statTotalUsers');
                     if (elTotal) elTotal.innerText = parseInt(elTotal.innerText || '0') + 1;
                     const elActive = document.getElementById('statActiveUsers');
                     if (elActive) elActive.innerText = parseInt(elActive.innerText || '0') + 1;
-
-                    filterUsersTable();
 
                     document.getElementById('addFormView').style.display = 'none';
                     document.getElementById('addSuccessView').style.display = 'block';
@@ -989,46 +1376,18 @@
                 const res = await response.json();
 
                 if (res.success) {
-                    const trafMaxEl = document.getElementById('user-traf-max-' + currentEditUserId);
-                    if (trafMaxEl) trafMaxEl.innerText = '/ ' + (res.max_traffic === 'Unlimited' ? '∞ Unlimited' : res.max_traffic);
-
-                    const trafTrack = document.getElementById('user-traf-track-' + currentEditUserId);
-                    if (trafTrack) {
-                        trafTrack.style.display = (res.max_traffic_gb && res.max_traffic_gb > 0) ? 'block' : 'none';
-                    }
-
-                    const expEl = document.getElementById('user-exp-' + currentEditUserId);
-                    if (expEl) expEl.innerText = res.expire_date ? (res.time_remaining || res.expire) : '∞ Lifetime';
-
-                    const expSubEl = document.getElementById('user-exp-sub-' + currentEditUserId);
-                    if (expSubEl) expSubEl.innerText = res.expire_date ? res.expire_date.substring(0, 10) : '';
-
-                    const row = document.getElementById('user-row-' + currentEditUserId);
-                    if (row) {
-                        const noteVal = res.note || '';
-                        row.setAttribute('data-note', noteVal.toLowerCase());
-                        let noteEl = row.querySelector('.user-note');
-                        if (noteVal) {
-                            if (noteEl) {
-                                noteEl.innerText = noteVal;
-                            } else {
-                                const meta = row.querySelector('.user-meta');
-                                if (meta) {
-                                    noteEl = document.createElement('span');
-                                    noteEl.className = 'user-note';
-                                    noteEl.innerText = noteVal;
-                                    meta.appendChild(noteEl);
-                                }
-                            }
-                        } else if (noteEl) {
-                            noteEl.remove();
-                        }
-
-                        const editBtn = document.getElementById('user-edit-btn-' + currentEditUserId);
-                        if (editBtn) {
-                            editBtn.setAttribute('onclick', `openEditModal('${res.user_id}', '${res.username}', '${res.max_traffic_gb || ''}', '${res.remaining_days !== undefined ? res.remaining_days : ''}', '${res.note || ''}')`);
+                    const targetUser = allUsers.find(u => String(u.id) === String(currentEditUserId));
+                    if (targetUser) {
+                        targetUser.max_traffic_gb = res.max_traffic_gb || 0;
+                        targetUser.expire_date = res.expire_date || '';
+                        targetUser.remaining_days = res.remaining_days !== undefined ? res.remaining_days : '';
+                        targetUser.time_remaining = res.expire_date ? (res.time_remaining || res.expire) : '∞ Lifetime';
+                        targetUser.note = res.note || '';
+                        if (res.password_changed) {
+                            targetUser.password = res.password;
                         }
                     }
+                    renderUsersTable();
 
                     if (res.password_changed) {
                         lastEditedPayload = res;
@@ -1092,10 +1451,14 @@
 
         async function toggleUser(userId, checkbox) {
             const newState = checkbox.checked ? 1 : 0;
-            const statusEl = document.getElementById('user-status-' + userId);
             const elActive = document.getElementById('statActiveUsers');
             
-            // Optimistic UI update
+            const targetUser = allUsers.find(u => String(u.id) === String(userId));
+            if (targetUser) {
+                targetUser.is_active = newState;
+            }
+
+            const statusEl = document.getElementById('user-status-' + userId);
             if (statusEl) {
                 statusEl.className = 'status-pill ' + (newState === 1 ? 'status-active' : 'status-disabled');
                 statusEl.innerText = newState === 1 ? 'Active' : 'Disabled';
@@ -1116,6 +1479,7 @@
                 });
                 const res = await response.json();
                 if (res.success) {
+                    if (targetUser) targetUser.is_active = res.is_active;
                     checkbox.checked = (res.is_active === 1);
                     if (statusEl) {
                         statusEl.className = 'status-pill ' + (res.is_active === 1 ? 'status-active' : 'status-disabled');
@@ -1127,103 +1491,21 @@
                 }
             } catch (err) {
                 // Rollback
-                checkbox.checked = (newState === 0);
+                const rollbackState = (newState === 1 ? 0 : 1);
+                if (targetUser) targetUser.is_active = rollbackState;
+                checkbox.checked = (rollbackState === 1);
                 if (statusEl) {
-                    statusEl.className = 'status-pill ' + (newState === 0 ? 'status-active' : 'status-disabled');
-                    statusEl.innerText = newState === 0 ? 'Active' : 'Disabled';
+                    statusEl.className = 'status-pill ' + (rollbackState === 1 ? 'status-active' : 'status-disabled');
+                    statusEl.innerText = rollbackState === 1 ? 'Active' : 'Disabled';
                 }
                 if (elActive) {
                     let cur = parseInt(elActive.innerText || '0');
-                    elActive.innerText = Math.max(0, newState === 0 ? cur + 1 : cur - 1);
+                    elActive.innerText = Math.max(0, rollbackState === 1 ? cur + 1 : cur - 1);
                 }
                 showToast(err.message || 'Error communicating with server.', 'error');
             } finally {
                 checkbox.disabled = false;
             }
-        }
-
-        function filterUsersTable() {
-            const query = document.getElementById('userSearchInput').value.toLowerCase().trim();
-            const rows = document.querySelectorAll('.user-table-row');
-
-            rows.forEach(row => {
-                const username = row.getAttribute('data-username') || '';
-                const note = row.getAttribute('data-note') || '';
-                if (username.includes(query) || note.includes(query)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-        }
-
-        function renderUserRowHTML(u) {
-            const onlineHtml = u.is_online
-                ? `<span class="badge-online">${u.device_count || 1} Online</span>`
-                : `<span class="badge badge-neutral">Offline</span>${u.last_seen_formatted ? `<div class="sub-text">${u.last_seen_formatted}</div>` : ''}`;
-
-            const maxTrafText = (u.max_traffic_gb && u.max_traffic_gb > 0)
-                ? `${u.max_traffic_gb} GB`
-                : '∞ Unlimited';
-            const trafBarHtml = (u.max_traffic_gb && u.max_traffic_gb > 0)
-                ? `<div class="progress-track" id="user-traf-track-${u.id}"><div id="user-traf-bar-${u.id}" class="progress-bar ${u.traffic_percent > 90 ? 'progress-danger' : (u.traffic_percent > 70 ? 'progress-warning' : '')}" style="width: ${u.traffic_percent}%;"></div></div>`
-                : `<div class="progress-track" id="user-traf-track-${u.id}" style="display: none;"><div id="user-traf-bar-${u.id}" class="progress-bar" style="width: 0%;"></div></div>`;
-
-            const expTitle = u.expire_date ? u.time_remaining : '∞ Lifetime';
-            const expSub = u.expire_date ? `<span class="sub-text" id="user-exp-sub-${u.id}">${u.expire_date.substring(0, 10)}</span>` : `<span class="sub-text" id="user-exp-sub-${u.id}"></span>`;
-            const statusClass = u.is_active === 1 ? 'status-active' : 'status-disabled';
-            const statusText = u.is_active === 1 ? 'Active' : 'Disabled';
-            const isChecked = u.is_active === 1 ? 'checked' : '';
-
-            return `
-                <td>
-                    <div class="user-cell">
-                        <div class="user-avatar">${u.username.substring(0, 2).toUpperCase()}</div>
-                        <div class="user-meta">
-                            <span class="user-name">${u.username}</span>
-                            ${u.note ? `<span class="user-note">${u.note}</span>` : ''}
-                        </div>
-                    </div>
-                </td>
-                <td id="user-online-${u.id}">${onlineHtml}</td>
-                <td>
-                    <div class="traffic-meter">
-                        <div class="meter-text">
-                            <span id="user-traf-used-${u.id}">${u.used_traffic_formatted}</span>
-                            <span class="meter-max" id="user-traf-max-${u.id}">/ ${maxTrafText}</span>
-                        </div>
-                        ${trafBarHtml}
-                    </div>
-                </td>
-                <td>
-                    <div class="expiration-cell">
-                        <span class="exp-title" id="user-exp-${u.id}">${expTitle}</span>
-                        ${expSub}
-                    </div>
-                </td>
-                <td>
-                    <span id="user-status-${u.id}" class="status-pill ${statusClass}">${statusText}</span>
-                </td>
-                <td class="text-right">
-                    <div class="action-buttons">
-                        <label class="switch-toggle" title="Toggle Active Status">
-                            <input type="checkbox" id="user-toggle-${u.id}" ${isChecked} onchange="toggleUser('${u.id}', this)">
-                            <span class="switch-slider"></span>
-                        </label>
-                        <button class="btn-icon btn-edit-user" id="user-edit-btn-${u.id}" onclick="openEditModal('${u.id}', '${u.username}', '${u.max_traffic_gb || ''}', '${u.remaining_days !== undefined ? u.remaining_days : ''}', '${u.note || ''}')" title="Edit User">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
-                            </svg>
-                        </button>
-                        <button type="button" class="btn-icon text-danger" onclick="confirmDeleteUser('${u.id}', '${u.username}')" title="Delete User">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="3 6 5 6 21 6"/>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                            </svg>
-                        </button>
-                    </div>
-                </td>
-            `;
         }
 
         let sseSource = null;
@@ -1302,94 +1584,8 @@
                     }
                     
                     if (data.users && Array.isArray(data.users)) {
-                        const tbody = document.getElementById('usersTableBody');
-                        const incomingIds = new Set(data.users.map(u => String(u.id)));
-
-                        document.querySelectorAll('.user-table-row').forEach(row => {
-                            const rowId = row.id.replace('user-row-', '');
-                            if (!incomingIds.has(rowId)) {
-                                row.remove();
-                            }
-                        });
-
-                        data.users.forEach(u => {
-                            let row = document.getElementById('user-row-' + u.id);
-                            if (!row) {
-                                const emptyRow = document.getElementById('emptyRow');
-                                if (emptyRow) emptyRow.remove();
-
-                                row = document.createElement('tr');
-                                row.id = 'user-row-' + u.id;
-                                row.className = 'user-table-row';
-                                row.setAttribute('data-username', u.username.toLowerCase());
-                                row.setAttribute('data-note', (u.note || '').toLowerCase());
-                                row.innerHTML = renderUserRowHTML(u);
-                                tbody.insertBefore(row, tbody.firstChild);
-                                filterUsersTable();
-                            } else {
-                                const onlineEl = document.getElementById('user-online-' + u.id);
-                                if (onlineEl) {
-                                    if (u.is_online) {
-                                        const devCount = u.device_count || 1;
-                                        onlineEl.innerHTML = `<span class="badge-online">${devCount} Online</span>`;
-                                    } else {
-                                        let offlineHtml = `<span class="badge badge-neutral">Offline</span>`;
-                                        if (u.last_seen_formatted) {
-                                            offlineHtml += `<div class="sub-text">${u.last_seen_formatted}</div>`;
-                                        }
-                                        onlineEl.innerHTML = offlineHtml;
-                                    }
-                                }
-                                
-                                const trafUsedEl = document.getElementById('user-traf-used-' + u.id);
-                                if (trafUsedEl) trafUsedEl.innerText = u.used_traffic_formatted;
-
-                                const trafMaxEl = document.getElementById('user-traf-max-' + u.id);
-                                if (trafMaxEl) {
-                                    trafMaxEl.innerText = '/ ' + ((u.max_traffic_gb && u.max_traffic_gb > 0) ? u.max_traffic_gb + ' GB' : '∞ Unlimited');
-                                }
-                                
-                                const trafTrack = document.getElementById('user-traf-track-' + u.id);
-                                if (trafTrack) {
-                                    trafTrack.style.display = (u.max_traffic_gb && u.max_traffic_gb > 0) ? 'block' : 'none';
-                                }
-
-                                const trafBarEl = document.getElementById('user-traf-bar-' + u.id);
-                                if (trafBarEl) {
-                                    trafBarEl.style.width = u.traffic_percent + '%';
-                                    let barClass = 'progress-bar';
-                                    if (u.traffic_percent > 90) barClass += ' progress-danger';
-                                    else if (u.traffic_percent > 70) barClass += ' progress-warning';
-                                    trafBarEl.className = barClass;
-                                }
-                                
-                                const expEl = document.getElementById('user-exp-' + u.id);
-                                if (expEl) {
-                                    expEl.innerText = u.expire_date ? u.time_remaining : '∞ Lifetime';
-                                }
-
-                                const expSubEl = document.getElementById('user-exp-sub-' + u.id);
-                                if (expSubEl) {
-                                    expSubEl.innerText = u.expire_date ? u.expire_date.substring(0, 10) : '';
-                                }
-                                
-                                const statusEl = document.getElementById('user-status-' + u.id);
-                                if (statusEl) {
-                                    statusEl.className = 'status-pill ' + (u.is_active === 1 ? 'status-active' : 'status-disabled');
-                                    statusEl.innerText = u.is_active === 1 ? 'Active' : 'Disabled';
-                                }
-
-                                const toggleEl = document.getElementById('user-toggle-' + u.id);
-                                if (toggleEl && document.activeElement !== toggleEl) {
-                                    toggleEl.checked = (u.is_active === 1);
-                                }
-
-                                const editBtn = document.getElementById('user-edit-btn-' + u.id);
-                                if (editBtn) {
-                                    editBtn.setAttribute('onclick', `openEditModal('${u.id}', '${u.username}', '${u.max_traffic_gb || ''}', '${u.remaining_days !== undefined ? u.remaining_days : ''}', '${u.note || ''}')`);
-                                }
-                            }
-                        });
+                        allUsers = data.users;
+                        renderUsersTable();
                     }
                 } catch(err) {
                     console.error("SSE parse error:", err);
@@ -1428,6 +1624,8 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            initPerPage();
+            renderUsersTable();
             initSSE();
             fetchGitHubStars();
         });
