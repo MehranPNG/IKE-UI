@@ -12,8 +12,10 @@ import signal
 import fcntl
 import secrets
 import string
+import io
+import tempfile
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response, stream_with_context
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response, stream_with_context, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -54,7 +56,7 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.3.0"
 
 app = Flask(
     __name__,
@@ -1405,6 +1407,352 @@ def delete_admin(admin_id):
         
     flash(f"Administrator '{target_admin['username']}' deleted successfully.", "warning")
     return redirect(url_for("settings"))
+
+# ================= Database Backup & Restore =================
+
+def validate_uploaded_sqlite_db(file_bytes):
+    """
+    Validates that the uploaded file is a valid, uncorrupted SQLite database
+    and contains a compatible `users` table with valid account records.
+    Returns: (is_valid: bool, error_message: str or None, parsed_users: list)
+    """
+    if not file_bytes:
+        return False, "No file content received.", []
+    
+    # Check SQLite magic header (first 16 bytes: 'SQLite format 3\x00')
+    if len(file_bytes) < 16 or not file_bytes.startswith(b"SQLite format 3\x00"):
+        return False, "Invalid file signature. The uploaded file is not a valid SQLite 3 database.", []
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_file:
+            tmp_file.write(file_bytes)
+            tmp_path = tmp_file.name
+
+        test_conn = sqlite3.connect(tmp_path, timeout=5.0)
+        test_conn.row_factory = sqlite3.Row
+        test_cur = test_conn.cursor()
+
+        # 1. Integrity check
+        test_cur.execute("PRAGMA integrity_check;")
+        check_row = test_cur.fetchone()
+        if not check_row or str(check_row[0]).lower() != "ok":
+            test_conn.close()
+            return False, "The database file appears corrupted (integrity check failed).", []
+
+        # 2. Check for users table
+        test_cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users';")
+        if not test_cur.fetchone():
+            test_conn.close()
+            return False, "Incompatible database: Table 'users' was not found in the uploaded file.", []
+
+        # 3. Check columns in users table
+        test_cur.execute("PRAGMA table_info(users);")
+        col_rows = test_cur.fetchall()
+        cols = {row["name"].lower() for row in col_rows}
+
+        if "username" not in cols or "password" not in cols:
+            test_conn.close()
+            return False, "Incompatible table schema: Missing required 'username' or 'password' columns.", []
+
+        # 4. Fetch all user records
+        test_cur.execute("SELECT * FROM users;")
+        rows = test_cur.fetchall()
+        test_conn.close()
+
+        if not rows:
+            return False, "The uploaded database contains 0 user records.", []
+
+        parsed_users = []
+        seen_usernames = set()
+        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        for r in rows:
+            r_dict = dict(r)
+            uname = str(r_dict.get("username", "")).strip()
+            if not uname:
+                continue
+            
+            uname_lower = uname.lower()
+            if uname_lower in seen_usernames:
+                continue
+            seen_usernames.add(uname_lower)
+
+            pwd = str(r_dict.get("password", "")).strip()
+            if not pwd:
+                pwd = generate_random_pwd(8)
+
+            try:
+                max_traffic = float(r_dict.get("max_traffic_gb") or 0.0)
+            except (ValueError, TypeError):
+                max_traffic = 0.0
+
+            try:
+                used_traffic = int(r_dict.get("used_traffic_bytes") or 0)
+            except (ValueError, TypeError):
+                used_traffic = 0
+
+            created = str(r_dict.get("created_at") or now_str).strip()
+            expire = r_dict.get("expire_date")
+            expire = str(expire).strip() if expire else None
+
+            try:
+                is_active = int(r_dict.get("is_active") if r_dict.get("is_active") is not None else 1)
+                is_active = 1 if is_active == 1 else 0
+            except (ValueError, TypeError):
+                is_active = 1
+
+            note = str(r_dict.get("note") or "").strip()
+            last_online = r_dict.get("last_online_at")
+            last_online = str(last_online).strip() if last_online else None
+
+            try:
+                max_dev = int(r_dict.get("max_devices") or 10)
+                max_dev = max(1, min(10, max_dev))
+            except (ValueError, TypeError):
+                max_dev = 10
+
+            parsed_users.append({
+                "username": uname,
+                "password": pwd,
+                "max_traffic_gb": max_traffic,
+                "used_traffic_bytes": used_traffic,
+                "created_at": created,
+                "expire_date": expire,
+                "is_active": is_active,
+                "note": note,
+                "last_online_at": last_online,
+                "max_devices": max_dev
+            })
+
+        if not parsed_users:
+            return False, "No valid user accounts found in the database.", []
+
+        return True, None, parsed_users
+
+    except Exception as e:
+        return False, f"Failed to parse database file: {e}", []
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
+@app.route("/backup/users", methods=["GET"])
+@login_required
+def backup_users():
+    """Generates and downloads a dedicated SQLite database backup containing only the users table."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users ORDER BY id ASC")
+        users = [dict(u) for u in cursor.fetchall()]
+        conn.close()
+
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+
+        export_conn = sqlite3.connect(tmp_path)
+        export_cur = export_conn.cursor()
+
+        export_cur.execute("""
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            max_traffic_gb REAL DEFAULT 0,
+            used_traffic_bytes INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            expire_date TEXT,
+            is_active INTEGER DEFAULT 1,
+            note TEXT DEFAULT '',
+            last_online_at TEXT,
+            max_devices INTEGER DEFAULT 10
+        )
+        """)
+
+        export_cur.execute("""
+        CREATE TABLE _ike_backup_meta (
+            backup_type TEXT,
+            created_at TEXT,
+            app_version TEXT,
+            user_count INTEGER
+        )
+        """)
+
+        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        export_cur.execute(
+            "INSERT INTO _ike_backup_meta (backup_type, created_at, app_version, user_count) VALUES ('users_backup', ?, ?, ?)",
+            (now_str, APP_VERSION, len(users))
+        )
+
+        for u in users:
+            export_cur.execute("""
+                INSERT INTO users (username, password, max_traffic_gb, used_traffic_bytes, created_at, expire_date, is_active, note, last_online_at, max_devices)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                u.get("username"),
+                u.get("password"),
+                u.get("max_traffic_gb", 0),
+                u.get("used_traffic_bytes", 0),
+                u.get("created_at", now_str),
+                u.get("expire_date"),
+                u.get("is_active", 1),
+                u.get("note", ""),
+                u.get("last_online_at"),
+                u.get("max_devices", 10)
+            ))
+
+        export_conn.commit()
+        export_conn.close()
+
+        with open(tmp_path, "rb") as f:
+            data = f.read()
+
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
+
+        filename = f"ike_users_backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+        return send_file(
+            io.BytesIO(data),
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/x-sqlite3"
+        )
+    except Exception as e:
+        print(f"[!] Error creating users backup: {e}", file=sys.stderr)
+        flash(f"Error creating users backup: {e}", "danger")
+        return redirect(url_for("settings"))
+
+@app.route("/backup/full", methods=["GET"])
+@login_required
+def backup_full():
+    """Generates and downloads a complete snapshot of the entire panel database."""
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+
+        src_conn = get_db()
+        dest_conn = sqlite3.connect(tmp_path)
+        with dest_conn:
+            src_conn.backup(dest_conn)
+        dest_conn.close()
+        src_conn.close()
+
+        with open(tmp_path, "rb") as f:
+            data = f.read()
+
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
+
+        filename = f"ike_panel_full_backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+        return send_file(
+            io.BytesIO(data),
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/x-sqlite3"
+        )
+    except Exception as e:
+        print(f"[!] Error creating full database backup: {e}", file=sys.stderr)
+        flash(f"Error creating full backup: {e}", "danger")
+        return redirect(url_for("settings"))
+
+@app.route("/restore/users/validate", methods=["POST"])
+@login_required
+def restore_users_validate():
+    """Validates an uploaded database file and returns user count and sample preview."""
+    if "backup_file" not in request.files:
+        return jsonify({"success": False, "error": "No backup file uploaded."}), 400
+
+    file = request.files["backup_file"]
+    if not file or file.filename == "":
+        return jsonify({"success": False, "error": "Please select a valid database file."}), 400
+
+    # Max upload limit check (50 MB)
+    file_bytes = file.read()
+    if len(file_bytes) > 50 * 1024 * 1024:
+        return jsonify({"success": False, "error": "Database file is too large (maximum allowed is 50MB)."}), 400
+
+    is_valid, error_msg, users = validate_uploaded_sqlite_db(file_bytes)
+    if not is_valid:
+        return jsonify({"success": False, "error": error_msg}), 400
+
+    preview = [u["username"] for u in users[:5]]
+    return jsonify({
+        "success": True,
+        "user_count": len(users),
+        "preview": preview
+    })
+
+@app.route("/restore/users/execute", methods=["POST"])
+@login_required
+def restore_users_execute():
+    """Restores users table from uploaded database file with confirmation enforcement."""
+    confirm_text = request.form.get("confirmation", "").strip()
+    if confirm_text.upper() != "RESTORE":
+        return jsonify({
+            "success": False,
+            "error": "Confirmation keyword mismatch. Please type RESTORE to confirm."
+        }), 400
+
+    if "backup_file" not in request.files:
+        return jsonify({"success": False, "error": "No backup file uploaded."}), 400
+
+    file = request.files["backup_file"]
+    if not file or file.filename == "":
+        return jsonify({"success": False, "error": "Please select a valid database file."}), 400
+
+    file_bytes = file.read()
+    if len(file_bytes) > 50 * 1024 * 1024:
+        return jsonify({"success": False, "error": "Database file exceeds maximum size of 50MB."}), 400
+
+    is_valid, error_msg, users = validate_uploaded_sqlite_db(file_bytes)
+    if not is_valid:
+        return jsonify({"success": False, "error": error_msg}), 400
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Atomic replacement of users table
+        cursor.execute("DELETE FROM users;")
+        for u in users:
+            cursor.execute("""
+                INSERT INTO users (username, password, max_traffic_gb, used_traffic_bytes, created_at, expire_date, is_active, note, last_online_at, max_devices)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                u["username"],
+                u["password"],
+                u["max_traffic_gb"],
+                u["used_traffic_bytes"],
+                u["created_at"],
+                u["expire_date"],
+                u["is_active"],
+                u["note"],
+                u["last_online_at"],
+                u["max_devices"]
+            ))
+
+        conn.commit()
+        conn.close()
+
+        # Resynchronize StrongSwan credentials & disconnect old SAs
+        sync_ipsec_secrets()
+        disconnect_all_sas()
+
+        return jsonify({
+            "success": True,
+            "message": f"Successfully restored {len(users)} users!",
+            "restored_count": len(users)
+        })
+    except Exception as e:
+        print(f"[!] Error during users restore: {e}", file=sys.stderr)
+        return jsonify({"success": False, "error": f"Database restore failed: {e}"}), 500
 
 # Initialize DB and run daemon
 init_db()

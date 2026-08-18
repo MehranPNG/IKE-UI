@@ -116,6 +116,82 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Database Backup & Restore Card -->
+            <div class="card settings-card" style="margin-top: 1.75rem;">
+                <div class="card-header">
+                    <h2>Database Backup & Restore</h2>
+                    <p>Export panel data or restore user accounts from a database file</p>
+                </div>
+                <div class="card-body" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <!-- User Accounts Backup & Restore Row -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem; padding: 1.2rem 1.35rem; background: #0f111a; border: 1.5px solid var(--border-dark); border-radius: var(--radius-md); box-shadow: var(--shadow-xs);">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-cyan);">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="9" cy="7" r="4"></circle>
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                </svg>
+                                <span style="font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700; color: #ffffff;">Users Database</span>
+                                <span style="font-family: var(--font-mono); font-size: 0.75rem; background: rgba(0, 240, 255, 0.12); color: var(--accent-cyan); padding: 2px 8px; border-radius: var(--radius-sm); border: 1px solid rgba(0, 240, 255, 0.3);">Users Only</span>
+                            </div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">
+                                Backup or restore all VPN user accounts, credentials, traffic quotas, and expiration dates.
+                            </div>
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+                            <a href="{{ url_for('backup_users') }}" class="btn btn-secondary" title="Download Users Database Backup">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                Backup Users
+                            </a>
+                            <button type="button" class="btn btn-primary" onclick="openRestoreModal()" title="Restore Users from Database Backup">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                Restore Users
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Full Database Snapshot Row -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem; padding: 1.2rem 1.35rem; background: #0f111a; border: 1.5px solid var(--border-dark); border-radius: var(--radius-md); box-shadow: var(--shadow-xs);">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-yellow);">
+                                    <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                                </svg>
+                                <span style="font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700; color: #ffffff;">Full Panel Database</span>
+                                <span style="font-family: var(--font-mono); font-size: 0.75rem; background: rgba(255, 208, 0, 0.12); color: var(--accent-yellow); padding: 2px 8px; border-radius: var(--radius-sm); border: 1px solid rgba(255, 208, 0, 0.3);">Full Snapshot</span>
+                            </div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">
+                                Download complete snapshot of panel database file (<code style="font-family: var(--font-mono); color: #ffffff;">panel.db</code>) for off-site cold archival.
+                            </div>
+                        </div>
+
+                        <div>
+                            <a href="{{ url_for('backup_full') }}" class="btn btn-secondary" title="Download Full Database Snapshot">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                Full DB Backup
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -167,6 +243,76 @@
                     <button type="submit" class="btn btn-primary" id="btnPasswordSubmit">Update Password</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Restore Database Modal with 2-Step Verification -->
+    <div id="restoreModal" class="modal">
+        <div class="modal-content" style="max-width: 490px;">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-cyan);">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <h3>Restore Users Database</h3>
+                </div>
+                <button class="btn-close" onclick="closeRestoreModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding-top: 1.25rem;">
+                
+                <!-- File Upload Dropzone -->
+                <div class="restore-dropzone" id="restoreDropzone" onclick="document.getElementById('restoreFileInput').click()">
+                    <input type="file" id="restoreFileInput" accept=".db,.sqlite,.sqlite3" style="display: none;" onchange="handleRestoreFileSelected(this.files)">
+                    <div class="restore-dropzone-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                    </div>
+                    <div class="restore-dropzone-text" id="restoreDropzoneTitle">Click or drag & drop backup database (.db) here</div>
+                    <div class="restore-dropzone-sub" id="restoreDropzoneSub">Supports SQLite database backup files</div>
+                </div>
+
+                <!-- Validation Feedback Box -->
+                <div id="restoreValidationStatus" style="display: none; margin-top: 1rem;"></div>
+
+                <!-- Warning Banner -->
+                <div id="restoreWarningBox" style="display: none; margin-top: 1rem; padding: 0.85rem 1rem; background: var(--danger-bg); border: 1.5px solid var(--danger); border-radius: var(--radius-md);">
+                    <div style="display: flex; gap: 0.6rem; align-items: flex-start;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--danger); flex-shrink: 0; margin-top: 1px;">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                            <line x1="12" y1="9" x2="12" y2="13"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                        <div style="font-size: 0.8rem; color: #ffccd1; line-height: 1.45;">
+                            <strong style="color: #ffffff;">Overwriting Warning:</strong> This operation will replace all existing users with the accounts from this backup file. All active sessions will be terminated. Admin accounts and panel settings will remain untouched.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2-Step Typed Confirmation -->
+                <div id="restoreConfirmSection" style="display: none; margin-top: 1.15rem;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-size: 0.82rem; color: var(--text-secondary); display: block; margin-bottom: 0.4rem;">
+                            To confirm, please type <strong style="color: var(--danger); font-family: var(--font-mono); letter-spacing: 0.05em;">RESTORE</strong> below:
+                        </label>
+                        <input type="text" id="restoreConfirmInput" placeholder="Type RESTORE to unlock" autocomplete="off" style="font-family: var(--font-mono); font-weight: 700; text-transform: uppercase;" oninput="checkRestoreConfirm()">
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeRestoreModal()">Cancel</button>
+                <button type="button" class="btn btn-danger" id="btnExecuteRestore" disabled onclick="executeRestoreUsers()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    <span>Confirm & Restore</span>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -307,6 +453,198 @@
         window.onclick = function(event) {
             if (event.target == document.getElementById('passwordModal')) closePasswordModal();
             if (event.target == document.getElementById('confirmVpnModal')) cancelVpnToggle();
+            if (event.target == document.getElementById('restoreModal')) closeRestoreModal();
+        }
+
+        // Restore Database Workflow
+        let selectedRestoreFile = null;
+        let isRestoreFileValid = false;
+
+        function openRestoreModal() {
+            selectedRestoreFile = null;
+            isRestoreFileValid = false;
+            const fileInput = document.getElementById('restoreFileInput');
+            if (fileInput) fileInput.value = '';
+            
+            const dropzone = document.getElementById('restoreDropzone');
+            const dropTitle = document.getElementById('restoreDropzoneTitle');
+            const dropSub = document.getElementById('restoreDropzoneSub');
+            if (dropzone) dropzone.classList.remove('has-file', 'drag-over');
+            if (dropTitle) dropTitle.innerText = 'Click or drag & drop backup database (.db) here';
+            if (dropSub) dropSub.innerText = 'Supports SQLite database backup files';
+
+            const statusEl = document.getElementById('restoreValidationStatus');
+            if (statusEl) {
+                statusEl.style.display = 'none';
+                statusEl.innerHTML = '';
+            }
+
+            const warnBox = document.getElementById('restoreWarningBox');
+            if (warnBox) warnBox.style.display = 'none';
+
+            const confirmSec = document.getElementById('restoreConfirmSection');
+            if (confirmSec) confirmSec.style.display = 'none';
+
+            const confirmInput = document.getElementById('restoreConfirmInput');
+            if (confirmInput) confirmInput.value = '';
+
+            const btnRestore = document.getElementById('btnExecuteRestore');
+            if (btnRestore) {
+                btnRestore.disabled = true;
+                btnRestore.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> <span>Confirm & Restore</span>`;
+            }
+
+            document.getElementById('restoreModal').style.display = 'flex';
+            document.body.classList.add('modal-open');
+        }
+
+        function closeRestoreModal() {
+            document.getElementById('restoreModal').style.display = 'none';
+            document.body.classList.remove('modal-open');
+            selectedRestoreFile = null;
+            isRestoreFileValid = false;
+        }
+
+        function handleRestoreFileSelected(files) {
+            if (!files || files.length === 0) return;
+            const file = files[0];
+            selectedRestoreFile = file;
+
+            const dropzone = document.getElementById('restoreDropzone');
+            const dropTitle = document.getElementById('restoreDropzoneTitle');
+            const dropSub = document.getElementById('restoreDropzoneSub');
+
+            if (dropzone) dropzone.classList.add('has-file');
+            if (dropTitle) dropTitle.innerText = file.name;
+            if (dropSub) dropSub.innerText = `${(file.size / 1024).toFixed(1)} KB • Click to choose different file`;
+
+            validateRestoreFile(file);
+        }
+
+        async function validateRestoreFile(file) {
+            const statusEl = document.getElementById('restoreValidationStatus');
+            const warnBox = document.getElementById('restoreWarningBox');
+            const confirmSec = document.getElementById('restoreConfirmSection');
+            const confirmInput = document.getElementById('restoreConfirmInput');
+            const btnRestore = document.getElementById('btnExecuteRestore');
+
+            statusEl.style.display = 'block';
+            statusEl.className = 'restore-status-box validating';
+            statusEl.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                    <div class="spinner-sm"></div>
+                    <span>Validating database structure and integrity...</span>
+                </div>
+            `;
+            warnBox.style.display = 'none';
+            confirmSec.style.display = 'none';
+            confirmInput.value = '';
+            btnRestore.disabled = true;
+            isRestoreFileValid = false;
+
+            const formData = new FormData();
+            formData.append('backup_file', file);
+
+            try {
+                const response = await fetch('/restore/users/validate', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                });
+                const res = await response.json();
+
+                if (res.success) {
+                    isRestoreFileValid = true;
+                    statusEl.className = 'restore-status-box valid';
+                    const sampleUsers = (res.preview && res.preview.length > 0) 
+                        ? `<div class="restore-user-pills">${res.preview.map(u => `<span class="restore-pill">${u}</span>`).join('')}${res.user_count > res.preview.length ? `<span class="restore-pill-more">+${res.user_count - res.preview.length} more</span>` : ''}</div>`
+                        : '';
+                    statusEl.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--success); flex-shrink: 0;"><polyline points="20 6 9 17 4 12"/></svg>
+                            <strong style="color: var(--success); font-size: 0.88rem;">Compatible Database Verified</strong>
+                            <span style="font-family: var(--font-mono); font-size: 0.75rem; background: var(--success-bg); color: var(--success); padding: 1px 7px; border-radius: var(--radius-sm); border: 1px solid rgba(0,245,155,0.3); margin-left: auto;">${res.user_count} User${res.user_count !== 1 ? 's' : ''}</span>
+                        </div>
+                        ${sampleUsers}
+                    `;
+                    warnBox.style.display = 'block';
+                    confirmSec.style.display = 'block';
+                    confirmInput.focus();
+                } else {
+                    isRestoreFileValid = false;
+                    statusEl.className = 'restore-status-box invalid';
+                    statusEl.innerHTML = `
+                        <div style="display: flex; align-items: flex-start; gap: 0.5rem;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--danger); flex-shrink: 0; margin-top: 1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                            <div>
+                                <strong style="color: var(--danger); font-size: 0.85rem; display: block;">Validation Failed</strong>
+                                <span style="font-size: 0.78rem; color: #ffccd1;">${res.error || 'The file is not a valid IKE-UI database.'}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                isRestoreFileValid = false;
+                statusEl.className = 'restore-status-box invalid';
+                statusEl.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--danger);"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        <span style="font-size: 0.8rem; color: #ffccd1;">Connection error during validation.</span>
+                    </div>
+                `;
+            }
+        }
+
+        function checkRestoreConfirm() {
+            const input = document.getElementById('restoreConfirmInput');
+            const btn = document.getElementById('btnExecuteRestore');
+            if (!input || !btn) return;
+            const typed = input.value.trim().toUpperCase();
+            btn.disabled = !(isRestoreFileValid && selectedRestoreFile && typed === 'RESTORE');
+        }
+
+        async function executeRestoreUsers() {
+            if (!isRestoreFileValid || !selectedRestoreFile) return;
+
+            const input = document.getElementById('restoreConfirmInput');
+            const typed = input ? input.value.trim().toUpperCase() : '';
+            if (typed !== 'RESTORE') {
+                showToast('Please type RESTORE to confirm.', 'warning');
+                return;
+            }
+
+            const btn = document.getElementById('btnExecuteRestore');
+            btn.disabled = true;
+            btn.innerHTML = `<div class="spinner-sm" style="display:inline-block; margin-right:5px;"></div> <span>Restoring...</span>`;
+
+            const formData = new FormData();
+            formData.append('backup_file', selectedRestoreFile);
+            formData.append('confirmation', typed);
+
+            try {
+                const response = await fetch('/restore/users/execute', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                });
+                const res = await response.json();
+
+                if (res.success) {
+                    closeRestoreModal();
+                    showToast(res.message || 'Users restored successfully! Reloading...', 'success', 4000);
+                    setTimeout(() => {
+                        window.location.href = "{{ url_for('dashboard') }}";
+                    }, 1200);
+                } else {
+                    showToast(res.error || 'Restore failed', 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> <span>Confirm & Restore</span>`;
+                }
+            } catch (err) {
+                showToast('Network error occurred during restore.', 'error');
+                btn.disabled = false;
+                btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> <span>Confirm & Restore</span>`;
+            }
         }
 
         // Form Validation & Submit
@@ -435,7 +773,38 @@
                 });
         }
 
-        document.addEventListener('DOMContentLoaded', fetchGitHubStars);
+        function setupDropzone() {
+            const dropzone = document.getElementById('restoreDropzone');
+            if (!dropzone) return;
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.add('drag-over');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.remove('drag-over');
+                }, false);
+            });
+
+            dropzone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                if (dt && dt.files && dt.files.length > 0) {
+                    handleRestoreFileSelected(dt.files);
+                }
+            }, false);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchGitHubStars();
+            setupDropzone();
+        });
     </script>
 </body>
 </html>

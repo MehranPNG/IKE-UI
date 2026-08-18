@@ -1939,3 +1939,125 @@ input.input-error:focus {
         font-size: 0.8rem;
     }
 }
+
+/* Restore Modal & Dropzone Styles */
+.restore-dropzone {
+    border: 2px dashed var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: #0f111a;
+    padding: 1.75rem 1.25rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.restore-dropzone:hover {
+    border-color: var(--primary);
+    background: #151826;
+    transform: translateY(-1px);
+}
+
+.restore-dropzone.drag-over {
+    border-color: var(--accent-cyan);
+    background: rgba(0, 240, 255, 0.08);
+}
+
+.restore-dropzone.has-file {
+    border-color: var(--primary);
+    border-style: solid;
+    background: #171a2a;
+}
+
+.restore-dropzone-icon {
+    color: var(--primary);
+    margin-bottom: 0.6rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.restore-dropzone.has-file .restore-dropzone-icon {
+    color: var(--accent-cyan);
+}
+
+.restore-dropzone-text {
+    font-family: var(--font-heading);
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 0.25rem;
+    word-break: break-all;
+}
+
+.restore-dropzone-sub {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.restore-status-box {
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-md);
+    border: 1.5px solid var(--border-dark);
+    font-size: 0.82rem;
+    box-shadow: var(--shadow-xs);
+}
+
+.restore-status-box.validating {
+    background: #161928;
+    color: var(--text-secondary);
+    border-color: var(--border-subtle);
+}
+
+.restore-status-box.valid {
+    background: rgba(0, 245, 155, 0.08);
+    border-color: var(--success);
+}
+
+.restore-status-box.invalid {
+    background: var(--danger-bg);
+    border-color: var(--danger);
+}
+
+.restore-user-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+}
+
+.restore-pill {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    background: #141724;
+    color: #ffffff;
+    padding: 2px 7px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+}
+
+.restore-pill-more {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    background: #1a1e30;
+    color: var(--text-muted);
+    padding: 2px 7px;
+    border-radius: var(--radius-sm);
+    border: 1px dashed var(--border-subtle);
+}
+
+.spinner-sm {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
