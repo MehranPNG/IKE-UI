@@ -276,7 +276,7 @@
                                 <td id="user-online-{{ u.id }}">
                                     {% if is_online %}
                                         {% set dev_cnt = online_data.get('device_count', 1) %}
-                                        <span class="badge badge-online">{{ dev_cnt }} Online</span>
+                                        <span class="badge badge-online">{{ dev_cnt }} / {{ u.max_devices or 10 }} Online</span>
                                     {% else %}
                                         <span class="badge badge-neutral">Offline</span>
                                         {% set last_seen = u.last_online_at | format_last_seen %}
@@ -315,7 +315,7 @@
                                             <span class="switch-slider"></span>
                                         </label>
 
-                                        <button class="btn-icon btn-edit-user" id="user-edit-btn-{{ u.id }}" onclick="openEditModal('{{ u.id }}', '{{ u.username }}', '{{ u.max_traffic_gb or '' }}', '{{ u.expire_date | get_remaining_days }}', '{{ u.note or '' }}')" title="Edit User">
+                                        <button class="btn-icon btn-edit-user" id="user-edit-btn-{{ u.id }}" onclick="openEditModal('{{ u.id }}', '{{ u.username }}', '{{ u.max_traffic_gb or '' }}', '{{ u.expire_date | get_remaining_days }}', '{{ u.note or '' }}', '{{ u.max_devices or 10 }}')" title="Edit User">
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                 <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
                                             </svg>
@@ -413,9 +413,25 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label>Note / Owner</label>
-                            <input type="text" name="note" placeholder="e.g. iPhone John">
+                        <div class="form-row">
+                            <div class="form-group col">
+                                <label>Device Limit (1-10)</label>
+                                <div class="number-stepper-wrap">
+                                    <input type="number" min="1" max="10" step="1" id="addMaxDevices" name="max_devices" value="10" placeholder="10">
+                                    <div class="stepper-controls">
+                                        <button type="button" class="stepper-btn" onclick="stepNumberInput('addMaxDevices', 1, 1)" title="Increase">
+                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="18 15 12 9 6 15"/></svg>
+                                        </button>
+                                        <button type="button" class="stepper-btn" onclick="stepNumberInput('addMaxDevices', -1, 1)" title="Decrease">
+                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group col">
+                                <label>Note / Owner</label>
+                                <input type="text" name="note" placeholder="e.g. iPhone John">
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -471,6 +487,10 @@
                         <div class="conn-item">
                             <span class="conn-label">Validity</span>
                             <span class="conn-value" id="succExpire"></span>
+                        </div>
+                        <div class="conn-item">
+                            <span class="conn-label">Device Limit</span>
+                            <span class="conn-value" id="succDevices">10 Devices</span>
                         </div>
                     </div>
                 </div>
@@ -546,9 +566,25 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label>Note</label>
-                            <input type="text" id="editNote" name="note">
+                        <div class="form-row">
+                            <div class="form-group col">
+                                <label>Device Limit (1-10)</label>
+                                <div class="number-stepper-wrap">
+                                    <input type="number" min="1" max="10" step="1" id="editMaxDevices" name="max_devices" placeholder="10">
+                                    <div class="stepper-controls">
+                                        <button type="button" class="stepper-btn" onclick="stepNumberInput('editMaxDevices', 1, 1)" title="Increase">
+                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="18 15 12 9 6 15"/></svg>
+                                        </button>
+                                        <button type="button" class="stepper-btn" onclick="stepNumberInput('editMaxDevices', -1, 1)" title="Decrease">
+                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group col">
+                                <label>Note</label>
+                                <input type="text" id="editNote" name="note">
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -604,6 +640,10 @@
                         <div class="conn-item">
                             <span class="conn-label">Validity</span>
                             <span class="conn-value" id="editSuccExpire"></span>
+                        </div>
+                        <div class="conn-item">
+                            <span class="conn-label">Device Limit</span>
+                            <span class="conn-value" id="editSuccDevices">10 Devices</span>
                         </div>
                     </div>
                 </div>
@@ -804,9 +844,26 @@
         function stepNumberInput(inputId, delta, step = 1) {
             const input = document.getElementById(inputId);
             if (!input) return;
-            let val = parseFloat(input.value) || 0;
-            val = Math.max(0, Math.round((val + delta * step) * 10) / 10);
-            input.value = val === 0 && delta < 0 ? '' : val;
+            const hasMin = input.hasAttribute('min');
+            const min = hasMin ? parseFloat(input.getAttribute('min')) : 0;
+            const hasMax = input.hasAttribute('max');
+            const max = hasMax ? parseFloat(input.getAttribute('max')) : null;
+
+            let raw = (input.value !== undefined && input.value !== null) ? String(input.value).trim() : '';
+            let val = parseFloat(raw);
+            if (isNaN(val)) {
+                val = (delta > 0 && hasMin) ? min : (delta < 0 && hasMax ? max : 0);
+            } else {
+                val = Math.round((val + delta * step) * 10) / 10;
+            }
+
+            if (hasMin && val < min) {
+                val = (input.placeholder && input.placeholder.includes('∞')) ? '' : min;
+            }
+            if (hasMax && val > max) {
+                val = max;
+            }
+            input.value = val;
             input.dispatchEvent(new Event('input', { bubbles: true }));
         }
 
@@ -834,6 +891,8 @@
             document.getElementById('addUserForm').reset();
             clearAllErrors('#addUserForm');
             generateRandomPassword('addPassword');
+            const devInp = document.getElementById('addMaxDevices');
+            if (devInp) devInp.value = 10;
             document.getElementById('addModal').style.display = 'flex';
             document.body.classList.add('modal-open');
         }
@@ -844,7 +903,7 @@
         }
 
         let currentEditUserId = null;
-        function openEditModal(id, username, maxTraffic, remainingDays, note) {
+        function openEditModal(id, username, maxTraffic, remainingDays, note, maxDevices) {
             currentEditUserId = id;
             document.getElementById('editModalUsername').innerText = username;
             document.getElementById('toggleChangePassword').checked = false;
@@ -852,6 +911,10 @@
             document.getElementById('editPassword').value = '';
             document.getElementById('editMaxTraffic').value = (maxTraffic && parseFloat(maxTraffic) > 0) ? maxTraffic : '';
             document.getElementById('editDurationDays').value = (remainingDays !== '' && remainingDays !== null) ? remainingDays : '';
+            const devInp = document.getElementById('editMaxDevices');
+            if (devInp) {
+                devInp.value = (maxDevices && parseInt(maxDevices) > 0) ? Math.max(1, Math.min(10, parseInt(maxDevices))) : 10;
+            }
             document.getElementById('editNote').value = note;
             clearAllErrors('#editUserForm');
 
@@ -1155,8 +1218,9 @@
         }
 
         function renderUserRowHTML(u) {
+            const maxDev = (u.max_devices && u.max_devices > 0) ? u.max_devices : 10;
             const onlineHtml = u.is_online
-                ? `<span class="badge badge-online">${u.device_count || 1} Online</span>`
+                ? `<span class="badge badge-online">${u.device_count || 1} / ${maxDev} Online</span>`
                 : `<span class="badge badge-neutral">Offline</span>${u.last_seen_formatted ? `<div class="sub-text">${escapeHtml(u.last_seen_formatted)}</div>` : ''}`;
 
             const maxTrafText = (u.max_traffic_gb && u.max_traffic_gb > 0)
@@ -1206,7 +1270,7 @@
                             <input type="checkbox" id="user-toggle-${u.id}" ${isChecked} onchange="toggleUser('${u.id}', this)">
                             <span class="switch-slider"></span>
                         </label>
-                        <button class="btn-icon btn-edit-user" id="user-edit-btn-${u.id}" onclick="openEditModal('${u.id}', '${escapeHtml(u.username)}', '${u.max_traffic_gb || ''}', '${u.remaining_days !== undefined ? u.remaining_days : ''}', '${escapeHtml(u.note || '')}')" title="Edit User">
+                        <button class="btn-icon btn-edit-user" id="user-edit-btn-${u.id}" onclick="openEditModal('${u.id}', '${escapeHtml(u.username)}', '${u.max_traffic_gb || ''}', '${u.remaining_days !== undefined ? u.remaining_days : ''}', '${escapeHtml(u.note || '')}', '${maxDev}')" title="Edit User">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
                             </svg>
@@ -1270,10 +1334,12 @@
             // Custom client-side validation
             const uInput = document.getElementById('addUsername');
             const pInput = document.getElementById('addPassword');
+            const devInput = document.getElementById('addMaxDevices');
             let valid = true;
 
             clearFieldError(uInput);
             clearFieldError(pInput);
+            if (devInput) clearFieldError(devInput);
 
             if (!uInput.value.trim()) {
                 showFieldError(uInput, 'Username is required');
@@ -1286,6 +1352,14 @@
             if (!pInput.value.trim()) {
                 showFieldError(pInput, 'Password is required');
                 valid = false;
+            }
+
+            if (devInput) {
+                const dVal = parseInt(devInput.value.trim());
+                if (isNaN(dVal) || dVal < 1 || dVal > 10) {
+                    showFieldError(devInput, 'Device limit must be between 1 and 10');
+                    valid = false;
+                }
             }
 
             if (!valid) {
@@ -1316,6 +1390,8 @@
                     document.getElementById('succPass').innerText = res.password;
                     document.getElementById('succTraffic').innerText = res.max_traffic;
                     document.getElementById('succExpire').innerText = res.expire;
+                    const succDevEl = document.getElementById('succDevices');
+                    if (succDevEl) succDevEl.innerText = `${res.max_devices || 10} Devices`;
 
                     const newUser = {
                         id: res.user_id,
@@ -1333,6 +1409,7 @@
                         remaining_days: res.remaining_days !== undefined ? res.remaining_days : '',
                         time_remaining: res.expire || '∞ Lifetime',
                         is_active: 1,
+                        max_devices: res.max_devices || 10,
                         note: res.note || ''
                     };
 
@@ -1366,12 +1443,23 @@
 
             const isChangingPwd = document.getElementById('toggleChangePassword').checked;
             const pInput = document.getElementById('editPassword');
+            const editDevInput = document.getElementById('editMaxDevices');
             clearFieldError(pInput);
+            if (editDevInput) clearFieldError(editDevInput);
 
             if (isChangingPwd && !pInput.value.trim()) {
                 showFieldError(pInput, 'Please enter new password');
                 pInput.focus();
                 return;
+            }
+
+            if (editDevInput) {
+                const dVal = parseInt(editDevInput.value.trim());
+                if (isNaN(dVal) || dVal < 1 || dVal > 10) {
+                    showFieldError(editDevInput, 'Device limit must be between 1 and 10');
+                    editDevInput.focus();
+                    return;
+                }
             }
 
             const btn = document.getElementById('btnEditSubmit');
@@ -1396,6 +1484,7 @@
                         targetUser.expire_date = res.expire_date || '';
                         targetUser.remaining_days = res.remaining_days !== undefined ? res.remaining_days : '';
                         targetUser.time_remaining = res.expire_date ? (res.time_remaining || res.expire) : '∞ Lifetime';
+                        targetUser.max_devices = res.max_devices || 10;
                         targetUser.note = res.note || '';
                         if (res.password_changed) {
                             targetUser.password = res.password;
@@ -1410,6 +1499,8 @@
                         document.getElementById('editSuccPass').innerText = res.password;
                         document.getElementById('editSuccTraffic').innerText = res.max_traffic;
                         document.getElementById('editSuccExpire').innerText = res.expire;
+                        const editSuccDevEl = document.getElementById('editSuccDevices');
+                        if (editSuccDevEl) editSuccDevEl.innerText = `${res.max_devices || 10} Devices`;
 
                         document.getElementById('editFormView').style.display = 'none';
                         document.getElementById('editSuccessView').style.display = 'block';
@@ -1443,7 +1534,7 @@
 
         function copyConnectionInfo() {
             if (!lastCreatedPayload) return;
-            const text = `🌐 Server: ${lastCreatedPayload.server}\n👤 Username: ${lastCreatedPayload.username}\n🔑 Password: ${lastCreatedPayload.password}\n📊 Traffic: ${lastCreatedPayload.max_traffic}\n⏳ Validity: ${lastCreatedPayload.expire}`;
+            const text = `🌐 Server: ${lastCreatedPayload.server}\n👤 Username: ${lastCreatedPayload.username}\n🔑 Password: ${lastCreatedPayload.password}\n📊 Traffic: ${lastCreatedPayload.max_traffic}\n⏳ Validity: ${lastCreatedPayload.expire}\n📱 Devices: ${lastCreatedPayload.max_devices || 10}`;
             navigator.clipboard.writeText(text).then(() => {
                 const btnText = document.getElementById('copyBtnText');
                 const orig = btnText.innerText;
@@ -1454,7 +1545,7 @@
 
         function copyEditConnectionInfo() {
             if (!lastEditedPayload) return;
-            const text = `🌐 Server: ${lastEditedPayload.server}\n👤 Username: ${lastEditedPayload.username}\n🔑 Password: ${lastEditedPayload.password}\n📊 Traffic: ${lastEditedPayload.max_traffic}\n⏳ Validity: ${lastEditedPayload.expire}`;
+            const text = `🌐 Server: ${lastEditedPayload.server}\n👤 Username: ${lastEditedPayload.username}\n🔑 Password: ${lastEditedPayload.password}\n📊 Traffic: ${lastEditedPayload.max_traffic}\n⏳ Validity: ${lastEditedPayload.expire}\n📱 Devices: ${lastEditedPayload.max_devices || 10}`;
             navigator.clipboard.writeText(text).then(() => {
                 const btnText = document.getElementById('editCopyBtnText');
                 const orig = btnText.innerText;

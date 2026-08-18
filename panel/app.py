@@ -54,7 +54,7 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.2.0"
 
 app = Flask(
     __name__,
@@ -274,7 +274,8 @@ def init_db():
             expire_date TEXT,
             is_active INTEGER DEFAULT 1,
             note TEXT DEFAULT '',
-            last_online_at TEXT
+            last_online_at TEXT,
+            max_devices INTEGER DEFAULT 10
         )
         """)
         
@@ -282,6 +283,13 @@ def init_db():
             cursor.execute("ALTER TABLE users ADD COLUMN last_online_at TEXT")
         except Exception:
             pass
+
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN max_devices INTEGER DEFAULT 10")
+        except Exception:
+            pass
+
+        cursor.execute("UPDATE users SET max_devices = 10 WHERE max_devices IS NULL OR max_devices <= 0 OR max_devices > 10")
         
         cursor.execute("SELECT * FROM admin WHERE username = 'admin'")
         if not cursor.fetchone():
@@ -294,8 +302,8 @@ def init_db():
             now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             default_user_pass = generate_random_pwd(8)
             cursor.execute("""
-                INSERT INTO users (username, password, max_traffic_gb, used_traffic_bytes, created_at, expire_date, is_active, note, last_online_at)
-                VALUES ('user1', ?, 0, 0, ?, NULL, 1, 'Default VPN User', NULL)
+                INSERT INTO users (username, password, max_traffic_gb, used_traffic_bytes, created_at, expire_date, is_active, note, last_online_at, max_devices)
+                VALUES ('user1', ?, 0, 0, ?, NULL, 1, 'Default VPN User', NULL, 10)
             """, (default_user_pass, now))
             
         conn.commit()
@@ -333,6 +341,31 @@ def disconnect_user_sas(username, online_dict=None):
                     subprocess.run(["ipsec", "down", str(sa_id)], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception as e:
         print(f"[!] Error disconnecting SAs for {username}: {e}", file=sys.stderr)
+
+def disconnect_excess_sas(username, max_devices, online_dict=None):
+    """Disconnect oldest excess SAs if a user has more connections than max_devices."""
+    if not username:
+        return
+    try:
+        max_dev = max(1, min(10, int(max_devices or 10)))
+        if online_dict is None:
+            online_dict = fetch_online_users_raw()
+        user_info = online_dict.get(username)
+        if user_info:
+            sa_ids = user_info.get("sa_ids", [])
+            if len(sa_ids) > max_dev:
+                try:
+                    sorted_sas = sorted(sa_ids, key=lambda x: int(x) if str(x).isdigit() else str(x))
+                except Exception:
+                    sorted_sas = list(sa_ids)
+                excess_count = len(sorted_sas) - max_dev
+                excess_sas = sorted_sas[:excess_count]
+                for sa_id in excess_sas:
+                    if sa_id:
+                        subprocess.run(["ipsec", "down", f"ikev2-vpn[{sa_id}]"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        subprocess.run(["ipsec", "down", str(sa_id)], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        print(f"[!] Error disconnecting excess SAs for {username}: {e}", file=sys.stderr)
 
 def sync_ipsec_secrets():
     with sync_lock:
@@ -619,7 +652,7 @@ def accounting_daemon():
                     
             conn.commit()
             
-            cursor.execute("SELECT id, username, max_traffic_gb, used_traffic_bytes, expire_date, is_active FROM users")
+            cursor.execute("SELECT id, username, max_traffic_gb, used_traffic_bytes, expire_date, is_active, max_devices FROM users")
             users = cursor.fetchall()
             
             should_resync = False
@@ -644,6 +677,14 @@ def accounting_daemon():
                     cursor.execute("UPDATE users SET is_active = 0 WHERE id = ?", (u["id"],))
                     should_resync = True
                     disconnect_user_sas(u["username"], online)
+                elif is_active == 1 and u["username"] in online:
+                    # Enforce per-user simultaneous device limit (1-10)
+                    user_max_dev = u["max_devices"] if u["max_devices"] is not None and u["max_devices"] > 0 else 10
+                    try:
+                        user_max_dev = max(1, min(10, int(user_max_dev)))
+                    except (ValueError, TypeError):
+                        user_max_dev = 10
+                    disconnect_excess_sas(u["username"], user_max_dev, online)
                             
             conn.commit()
             conn.close()
@@ -821,6 +862,12 @@ def format_user_payload(u, online):
     note = (u.get("note") if isinstance(u, dict) else u["note"]) or ""
     u_id = u.get("id") if isinstance(u, dict) else u["id"]
     u_pwd = u.get("password") if isinstance(u, dict) else u["password"]
+    raw_max_dev = u.get("max_devices") if isinstance(u, dict) else u["max_devices"]
+    try:
+        max_dev = int(raw_max_dev) if raw_max_dev is not None else 10
+        max_dev = max(1, min(10, max_dev))
+    except (ValueError, TypeError):
+        max_dev = 10
     
     return {
         "id": u_id,
@@ -838,6 +885,7 @@ def format_user_payload(u, online):
         "remaining_days": calc_remaining_days(exp_date),
         "time_remaining": time_remaining(exp_date),
         "is_active": is_act,
+        "max_devices": max_dev,
         "note": note
     }
 
@@ -933,6 +981,13 @@ def add_user():
     
     raw_days = request.form.get("duration_days", "").strip()
     duration_days = int(raw_days) if raw_days else 0
+
+    raw_devices = request.form.get("max_devices", "10").strip()
+    try:
+        max_devices = int(raw_devices) if raw_devices else 10
+        max_devices = max(1, min(10, max_devices))
+    except ValueError:
+        max_devices = 10
     
     note = request.form.get("note", "").strip()
     
@@ -969,9 +1024,9 @@ def add_user():
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO users (username, password, max_traffic_gb, used_traffic_bytes, created_at, expire_date, is_active, note, last_online_at)
-            VALUES (?, ?, ?, 0, ?, ?, 1, ?, NULL)
-        """, (username, password, max_traffic_gb, created_at, expire_date, note))
+            INSERT INTO users (username, password, max_traffic_gb, used_traffic_bytes, created_at, expire_date, is_active, note, last_online_at, max_devices)
+            VALUES (?, ?, ?, 0, ?, ?, 1, ?, NULL, ?)
+        """, (username, password, max_traffic_gb, created_at, expire_date, note, max_devices))
         conn.commit()
         user_id = cursor.lastrowid
         conn.close()
@@ -993,6 +1048,7 @@ def add_user():
                 "expire": expire_display,
                 "expire_date": expire_date or "",
                 "remaining_days": duration_days if duration_days > 0 else "",
+                "max_devices": max_devices,
                 "note": note
             })
             
@@ -1072,15 +1128,30 @@ def edit_user(user_id):
             expire_display = calc_remaining_days(user["expire_date"])
             time_rem = time_remaining(user["expire_date"])
             rem_days = calc_remaining_days(user["expire_date"])
+
+    raw_devices = request.form.get("max_devices", "").strip()
+    if raw_devices == "":
+        existing_dev = user["max_devices"] if ("max_devices" in user.keys() and user["max_devices"] is not None) else 10
+        try:
+            max_devices = max(1, min(10, int(existing_dev)))
+        except (ValueError, TypeError):
+            max_devices = 10
+    else:
+        try:
+            val_dev = int(raw_devices)
+            max_devices = max(1, min(10, val_dev))
+        except ValueError:
+            existing_dev = user["max_devices"] if ("max_devices" in user.keys() and user["max_devices"] is not None) else 10
+            max_devices = max(1, min(10, int(existing_dev or 10)))
             
     note = request.form.get("note", "").strip()
     
     query = """
         UPDATE users 
-        SET password = ?, max_traffic_gb = ?, expire_date = ?, note = ?
+        SET password = ?, max_traffic_gb = ?, expire_date = ?, note = ?, max_devices = ?
         WHERE id = ?
     """
-    params = [new_password, max_traffic_gb, new_expire, note, user_id]
+    params = [new_password, max_traffic_gb, new_expire, note, max_devices, user_id]
     
     cursor.execute(query, params)
     conn.commit()
@@ -1089,6 +1160,8 @@ def edit_user(user_id):
     sync_ipsec_secrets()
     if pwd_was_changed:
         disconnect_user_sas(user["username"])
+    else:
+        disconnect_excess_sas(user["username"], max_devices)
     
     if is_ajax:
         return jsonify({
@@ -1104,6 +1177,7 @@ def edit_user(user_id):
             "time_remaining": time_rem,
             "expire_date": new_expire or "",
             "remaining_days": rem_days,
+            "max_devices": max_devices,
             "note": note
         })
         
