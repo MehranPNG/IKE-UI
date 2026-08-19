@@ -566,8 +566,8 @@ else:
         fi
         chmod 600 /etc/ipsec.d/private/privkey.pem
         chmod 644 /etc/ipsec.d/certs/cert.pem /etc/ipsec.d/cacerts/* 2>/dev/null || true
-        ipsec reload 2>/dev/null || true
-        ipsec rereadsecrets 2>/dev/null || true
+        ipsec rereadall 2>/dev/null || true
+        ipsec restart 2>/dev/null || systemctl restart strongswan-starter.service 2>/dev/null || systemctl restart strongswan.service 2>/dev/null || true
         systemctl reload nginx 2>/dev/null || true
         break
     fi
@@ -882,8 +882,8 @@ else:
         fi
         chmod 600 /etc/ipsec.d/private/privkey.pem 2>/dev/null || true
         chmod 644 /etc/ipsec.d/certs/cert.pem /etc/ipsec.d/cacerts/* 2>/dev/null || true
-        ipsec reload 2>/dev/null || true
-        ipsec rereadsecrets 2>/dev/null || true
+        ipsec rereadall 2>/dev/null || true
+        ipsec restart 2>/dev/null || systemctl restart strongswan-starter.service 2>/dev/null || systemctl restart strongswan.service 2>/dev/null || true
 
         mkdir -p /etc/letsencrypt/renewal-hooks/deploy
         cat > /etc/letsencrypt/renewal-hooks/deploy/strongswan.sh << 'RENEW_EOF'
@@ -914,8 +914,8 @@ else:
         fi
         chmod 600 /etc/ipsec.d/private/privkey.pem
         chmod 644 /etc/ipsec.d/certs/cert.pem /etc/ipsec.d/cacerts/* 2>/dev/null || true
-        ipsec reload 2>/dev/null || true
-        ipsec rereadsecrets 2>/dev/null || true
+        ipsec rereadall 2>/dev/null || true
+        ipsec restart 2>/dev/null || systemctl restart strongswan-starter.service 2>/dev/null || systemctl restart strongswan.service 2>/dev/null || true
         systemctl reload nginx 2>/dev/null || true
         break
     fi
