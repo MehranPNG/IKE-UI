@@ -679,7 +679,7 @@
                     </div>
                     <div>
                         <h3 id="infoModalUsername">User Details</h3>
-                        <span class="sub-text" id="infoModalSubtext">Account & Connection Overview</span>
+                        <span class="sub-text" id="infoModalSubtext">Account Overview</span>
                     </div>
                 </div>
                 <button class="btn-close" onclick="closeUserInfoModal()">&times;</button>
@@ -690,23 +690,21 @@
                 <div id="infoUserLiveNetCard" class="user-live-net-card" style="display: none;">
                     <div class="live-net-header">
                         <div class="live-net-title">
-                            <span class="badge-pulse"></span>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
                             </svg>
                             <span>Live Network</span>
                         </div>
-                        <span class="badge badge-online">● Online Session</span>
                     </div>
                     
                     <div class="live-net-body">
                         <div class="live-net-speed-row">
                             <div class="speed-box speed-down">
-                                <span class="speed-label">Download Speed</span>
+                                <span class="speed-label">Download</span>
                                 <span class="speed-value" id="infoNetRxVal">↓ 0 B/s</span>
                             </div>
                             <div class="speed-box speed-up">
-                                <span class="speed-label">Upload Speed</span>
+                                <span class="speed-label">Upload</span>
                                 <span class="speed-value" id="infoNetTxVal">↑ 0 B/s</span>
                             </div>
                         </div>
@@ -1076,7 +1074,7 @@
             const userUname = document.getElementById('infoModalUsername');
             const userSub = document.getElementById('infoModalSubtext');
             if (userUname) userUname.innerText = u.username || 'User Details';
-            if (userSub) userSub.innerText = 'Account #' + u.id + ' • ' + (u.is_online ? 'Currently Online' : 'Currently Offline');
+            if (userSub) userSub.innerText = 'Account #' + u.id;
 
             // 1. Live Network Card (Shown ONLY when user is online)
             const liveNetCard = document.getElementById('infoUserLiveNetCard');

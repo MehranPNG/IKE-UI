@@ -44,7 +44,7 @@
             </div>
         </header>
 
-        <main class="main-content" style="max-width: 680px; margin: 2rem auto;">
+        <main class="main-content settings-main">
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
@@ -54,9 +54,9 @@
             {% endwith %}
 
             <!-- VPN Service Kill Switch Card -->
-            <div class="card settings-card" style="margin-bottom: 1.75rem;">
-                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
+            <div class="card settings-card">
+                <div class="card-header settings-header-flex">
+                    <div class="settings-header-title">
                         <h2>VPN Service Control</h2>
                         <p>Global kill switch to block or allow all VPN connections</p>
                     </div>
@@ -66,14 +66,14 @@
                     </label>
                 </div>
                 <div class="card-body">
-                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.15rem; background: #0f111a; border: 1.5px solid var(--border-dark); border-radius: var(--radius-md); box-shadow: var(--shadow-xs);">
-                        <div style="display: flex; align-items: center; gap: 0.75rem;">
-                            <div id="vpnStatusIndicatorDot" style="width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--border-dark); background: {% if vpn_enabled %}var(--success){% else %}var(--danger){% endif %}; flex-shrink: 0;"></div>
-                            <div>
-                                <div style="font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700; color: #ffffff;" id="vpnStatusTitle">
+                    <div class="settings-status-box">
+                        <div class="settings-status-info">
+                            <div id="vpnStatusIndicatorDot" class="settings-indicator-dot" style="background: {% if vpn_enabled %}var(--success){% else %}var(--danger){% endif %};"></div>
+                            <div class="settings-status-text">
+                                <div class="settings-status-title" id="vpnStatusTitle">
                                     {% if vpn_enabled %}Service Active & Accepting Connections{% else %}Service Disabled (Maintenance Mode){% endif %}
                                 </div>
-                                <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;" id="vpnStatusSub">
+                                <div class="settings-status-desc" id="vpnStatusSub">
                                     {% if vpn_enabled %}VPN clients can connect and authenticate normally.{% else %}All client sessions are terminated and new connections are blocked.{% endif %}
                                 </div>
                             </div>
@@ -92,57 +92,59 @@
                     <p>Manage panel access password and credentials</p>
                 </div>
                 <div class="card-body">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem; padding: 1.2rem 1.35rem; background: #0f111a; border: 1.5px solid var(--border-dark); border-radius: var(--radius-md); box-shadow: var(--shadow-xs);">
-                        <div>
-                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                    <div class="settings-row">
+                        <div class="settings-row-info">
+                            <div class="settings-row-label">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--primary);">
                                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                                     <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                                 </svg>
-                                <span style="font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700; color: #ffffff;">Panel Administrator</span>
-                                <span style="font-family: var(--font-mono); font-size: 0.78rem; background: #1a1d2e; color: var(--primary); padding: 2px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-dark);">{{ current_admin }}</span>
+                                <span class="settings-row-title">Panel Administrator</span>
+                                <span class="settings-badge-admin">{{ current_admin }}</span>
                             </div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted);">
+                            <div class="settings-row-desc">
                                 Update the password used to authenticate into this management panel.
                             </div>
                         </div>
 
-                        <button type="button" class="btn btn-primary" onclick="openPasswordModal()">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 2l-2 2m-1.5 1.5L10 13l-4 4v4h4l4-4 7.5-7.5M16 5l3 3"/>
-                            </svg>
-                            Change Password
-                        </button>
+                        <div class="settings-row-action">
+                            <button type="button" class="btn btn-primary" onclick="openPasswordModal()">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                                </svg>
+                                Change Password
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Database Backup & Restore Card -->
-            <div class="card settings-card" style="margin-top: 1.75rem;">
+            <div class="card settings-card">
                 <div class="card-header">
                     <h2>Database Backup & Restore</h2>
                     <p>Export panel data or restore user accounts from a database file</p>
                 </div>
-                <div class="card-body" style="display: flex; flex-direction: column; gap: 1rem;">
+                <div class="card-body settings-card-body-stack">
                     <!-- User Accounts Backup & Restore Row -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem; padding: 1.2rem 1.35rem; background: #0f111a; border: 1.5px solid var(--border-dark); border-radius: var(--radius-md); box-shadow: var(--shadow-xs);">
-                        <div>
-                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                    <div class="settings-row">
+                        <div class="settings-row-info">
+                            <div class="settings-row-label">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-cyan);">
                                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                                     <circle cx="9" cy="7" r="4"></circle>
                                     <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
                                     <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                                 </svg>
-                                <span style="font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700; color: #ffffff;">Users Database</span>
-                                <span style="font-family: var(--font-mono); font-size: 0.75rem; background: rgba(0, 240, 255, 0.12); color: var(--accent-cyan); padding: 2px 8px; border-radius: var(--radius-sm); border: 1px solid rgba(0, 240, 255, 0.3);">Users Only</span>
+                                <span class="settings-row-title">Users Database</span>
+                                <span class="settings-badge-cyan">Users Only</span>
                             </div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted);">
+                            <div class="settings-row-desc">
                                 Backup or restore all VPN user accounts, credentials, traffic quotas, and expiration dates.
                             </div>
                         </div>
 
-                        <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+                        <div class="settings-row-actions">
                             <a href="{{ url_for('backup_users') }}" class="btn btn-secondary" title="Download Users Database Backup">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -163,23 +165,23 @@
                     </div>
 
                     <!-- Full Database Snapshot Row -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem; padding: 1.2rem 1.35rem; background: #0f111a; border: 1.5px solid var(--border-dark); border-radius: var(--radius-md); box-shadow: var(--shadow-xs);">
-                        <div>
-                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                    <div class="settings-row">
+                        <div class="settings-row-info">
+                            <div class="settings-row-label">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-yellow);">
                                     <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
                                     <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
                                     <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
                                 </svg>
-                                <span style="font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700; color: #ffffff;">Full Panel Database</span>
-                                <span style="font-family: var(--font-mono); font-size: 0.75rem; background: rgba(255, 208, 0, 0.12); color: var(--accent-yellow); padding: 2px 8px; border-radius: var(--radius-sm); border: 1px solid rgba(255, 208, 0, 0.3);">Full Snapshot</span>
+                                <span class="settings-row-title">Full Panel Database</span>
+                                <span class="settings-badge-yellow">Full Snapshot</span>
                             </div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted);">
-                                Download complete snapshot of panel database file (<code style="font-family: var(--font-mono); color: #ffffff;">panel.db</code>) for off-site cold archival.
+                            <div class="settings-row-desc">
+                                Download complete snapshot of panel database file (<code class="settings-code">panel.db</code>) for off-site cold archival.
                             </div>
                         </div>
 
-                        <div>
+                        <div class="settings-row-action">
                             <a href="{{ url_for('backup_full') }}" class="btn btn-secondary" title="Download Full Database Snapshot">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>

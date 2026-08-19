@@ -2,7 +2,7 @@
 set -e
 
 REPO_URL="https://github.com/MehranPNG/IKE-UI.git"
-APP_VERSION="1.4.2"
+APP_VERSION="1.4.3"
 INSTALL_DIR="/opt/ike-ui"
 PANEL_DIR="${INSTALL_DIR}/panel"
 DB_DIR="/etc/strongswan-panel"
@@ -29,7 +29,7 @@ show_banner() {
         disk_ver=$(grep -oP '^APP_VERSION=["\x27]?\K[^"\x27\s]+' "${INSTALL_DIR}/install.sh" 2>/dev/null || true)
         if [ -n "$disk_ver" ]; then
             cur_ver="$disk_ver"
-            APP_VERSION="1.4.2"
+            APP_VERSION="1.4.3"
         fi
     fi
     echo -e "${PURPLE}${BOLD}"
@@ -466,10 +466,28 @@ NGINX_EOF
 }
 
 update_ike_ui() {
+    local target_channel="$1"
+
     show_banner
-    echo -e "${CYAN}${BOLD}[*] Starting IKE-UI Update Process...${NC}"
+    echo -e "${CYAN}${BOLD}[*] IKE-UI Update Manager${NC}"
     echo ""
 
+    if [ -z "$target_channel" ]; then
+        echo -e "${BOLD}Select Update Channel:${NC}"
+        echo -e "  ${CYAN}1)${NC}  Latest Tagged Release (Stable) [Recommended]"
+        echo -e "  ${CYAN}2)${NC}  Latest Commit (Dev / main branch)"
+        echo -e "  ${CYAN}0)${NC}  Cancel"
+        echo ""
+        read -rp "Enter choice [1-2, default=1]: " update_choice
+        case "$update_choice" in
+            1|"") target_channel="release" ;;
+            2)    target_channel="dev" ;;
+            0)    echo -e "${YELLOW}[*] Update cancelled.${NC}"; return 0 ;;
+            *)    echo -e "${RED}[X] Invalid option.${NC}"; return 1 ;;
+        esac
+    fi
+
+    echo ""
     if ! command -v git >/dev/null 2>&1; then
         echo -e "${YELLOW}[*] Installing git...${NC}"
         apt-get update -y && apt-get install -y git
@@ -479,21 +497,47 @@ update_ike_ui() {
     cd "$INSTALL_DIR"
 
     if [ -d "$INSTALL_DIR/.git" ]; then
-        echo -e "${CYAN}[1/4] Pulling latest updates from GitHub repository...${NC}"
         git remote set-url origin "$REPO_URL" 2>/dev/null || true
+        echo -e "${CYAN}[1/4] Fetching latest tags and commits from GitHub...${NC}"
         git fetch --all --tags --prune
-        git reset --hard origin/main
-        echo -e "${GREEN}[+] Git repository updated successfully.${NC}"
     else
         echo -e "${YELLOW}[1/4] Initializing Git repository in ${INSTALL_DIR}...${NC}"
         TEMP_CLONE="/tmp/ike-ui-update-temp"
         rm -rf "$TEMP_CLONE"
-        git clone -b main "$REPO_URL" "$TEMP_CLONE"
+        git clone "$REPO_URL" "$TEMP_CLONE"
         cp -r "$TEMP_CLONE/.git" "$INSTALL_DIR/"
         rm -rf "$TEMP_CLONE"
-        git reset --hard origin/main
+        git fetch --all --tags --prune
         echo -e "${GREEN}[+] Converted to tracked Git repository.${NC}"
     fi
+
+    case "$target_channel" in
+        release|stable|tag|1)
+            local latest_tag
+            latest_tag=$(git tag -l --sort=-v:refname | grep -E '^v?[0-9]+\.[0-9]+' | head -n 1)
+            if [ -n "$latest_tag" ]; then
+                echo -e "${CYAN}[*] Updating to latest release tag: ${GREEN}${BOLD}${latest_tag}${NC}..."
+                git checkout -B main origin/main 2>/dev/null || true
+                git reset --hard "$latest_tag"
+                echo -e "${GREEN}[+] Reset repository to release tag ${latest_tag}.${NC}"
+            else
+                echo -e "${YELLOW}[!] No release tags found. Falling back to latest commit on main...${NC}"
+                git checkout -B main origin/main 2>/dev/null || true
+                git reset --hard origin/main
+                echo -e "${GREEN}[+] Git repository updated to latest commit.${NC}"
+            fi
+            ;;
+        dev|main|commit|2)
+            echo -e "${CYAN}[*] Pulling latest development commits from main branch...${NC}"
+            git checkout -B main origin/main 2>/dev/null || true
+            git reset --hard origin/main
+            echo -e "${GREEN}[+] Git repository updated to latest development commit.${NC}"
+            ;;
+        *)
+            echo -e "${RED}[X] Unknown update target: $target_channel${NC}"
+            return 1
+            ;;
+    esac
 
     chmod +x "${INSTALL_DIR}/install.sh" 2>/dev/null || true
     setup_cli_shortcut
@@ -535,7 +579,7 @@ app.init_db()
         new_ver=$(grep -oP '^APP_VERSION\s*=\s*["\x27]?\K[^"\x27\s]+' "${INSTALL_DIR}/panel/app.py" 2>/dev/null || true)
     fi
     if [ -n "$new_ver" ]; then
-        APP_VERSION="1.4.2"
+        APP_VERSION="1.4.3"
     fi
 
     if systemctl is-active --quiet ike-ui.service; then
@@ -726,7 +770,7 @@ show_help() {
     echo -e "Commands:"
     echo -e "  ${CYAN}(no arg)${NC}      Open interactive management menu"
     echo -e "  ${CYAN}install, -i${NC}   Full installation and deployment"
-    echo -e "  ${CYAN}update, -u${NC}    Update IKE-UI to latest version from GitHub"
+    echo -e "  ${CYAN}update, -u${NC} [release|dev]  Update IKE-UI (1: Tagged Release, 2: Dev Commit)"
     echo -e "  ${CYAN}restart, -r${NC}   Restart all services (StrongSwan, Panel, Nginx)"
     echo -e "  ${CYAN}start${NC}         Start all services"
     echo -e "  ${CYAN}stop${NC}          Stop all services"
@@ -745,7 +789,7 @@ menu() {
         show_banner
         echo -e "${BOLD}Select an action:${NC}"
         echo -e "  ${CYAN}1)${NC}  Full Install / Re-deploy"
-        echo -e "  ${CYAN}2)${NC}  Update IKE-UI (Pull Latest from GitHub)"
+        echo -e "  ${CYAN}2)${NC}  Update IKE-UI (1: Tagged Release, 2: Dev Commit)"
         echo -e "  ${CYAN}3)${NC}  Restart All Services (StrongSwan, Panel, Nginx)"
         echo -e "  ${CYAN}4)${NC}  Stop All Services"
         echo -e "  ${CYAN}5)${NC}  Start All Services"
@@ -807,7 +851,7 @@ case "$1" in
         install_all "$2"
         ;;
     update|-u|--update)
-        update_ike_ui
+        update_ike_ui "$2"
         ;;
     restart|-r|--restart)
         restart_services
