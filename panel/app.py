@@ -57,7 +57,7 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.4.5"
+APP_VERSION = "1.4.6"
 
 app = Flask(
     __name__,
@@ -97,7 +97,8 @@ def inject_globals():
         app_version=APP_VERSION,
         current_admin=session.get("admin_user", ""),
         vpn_enabled=(get_system_config("vpn_enabled", "1") == "1"),
-        base_path=request.script_root
+        base_path=request.script_root,
+        panel_path=get_system_config("panel_path", "")
     )
 
 prev_cpu_times = None
@@ -1377,57 +1378,281 @@ def delete_user(user_id):
         conn.close()
     return redirect(url_for("dashboard"))
 
+def update_nginx_panel_path(new_path):
+    try:
+        domain = get_system_config("server_domain", SERVER_DOMAIN)
+        port = get_system_config("panel_port", "443")
+        
+        conf_path = "/etc/nginx/sites-available/ike-ui"
+        if os.path.exists(conf_path):
+            try:
+                with open(conf_path, "r") as f:
+                    content = f.read()
+                    m_dom = re.search(r'server_name\s+([^;]+);', content)
+                    if m_dom:
+                        domain = m_dom.group(1).strip()
+                    m_port = re.search(r'listen\s+([0-9]+)\s+ssl', content)
+                    if m_port:
+                        port = m_port.group(1).strip()
+            except Exception:
+                pass
+
+        clean_path = re.sub(r'^/+|/+$', '', str(new_path or "").strip())
+        if clean_path.lower() in ("/", "root"):
+            clean_path = ""
+        else:
+            clean_path = re.sub(r'[^a-zA-Z0-9_-]', '', clean_path)
+
+        redirect_port = f":{port}" if str(port) != "443" else ""
+
+        nginx_conf = f"""server {{
+    listen 80;
+    server_name {domain};
+    return 301 https://$host{redirect_port}$request_uri;
+}}
+
+server {{
+    listen {port} ssl http2;
+    server_name {domain};
+
+    ssl_certificate /etc/letsencrypt/live/{domain}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{domain}/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+"""
+        if clean_path:
+            nginx_conf += f"""
+    location = /{clean_path} {{
+        return 301 /{clean_path}/;
+    }}
+
+    location /{clean_path}/ {{
+        proxy_pass http://127.0.0.1:8000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port $server_port;
+        proxy_set_header X-Forwarded-Prefix /{clean_path};
+
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 86400s;
+        proxy_set_header Connection '';
+        proxy_http_version 1.1;
+        chunked_transfer_encoding off;
+    }}
+
+    location / {{
+        return 404;
+    }}
+}}
+"""
+        else:
+            nginx_conf += f"""
+    location / {{
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port $server_port;
+        proxy_set_header X-Forwarded-Prefix "";
+
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 86400s;
+        proxy_set_header Connection '';
+        proxy_http_version 1.1;
+        chunked_transfer_encoding off;
+    }}
+}}
+"""
+        if os.path.exists(os.path.dirname(conf_path)):
+            backup_path = f"{conf_path}.bak"
+            try:
+                if os.path.exists(conf_path):
+                    shutil.copy2(conf_path, backup_path)
+                with open(conf_path, "w") as f:
+                    f.write(nginx_conf)
+                res = subprocess.run(["nginx", "-t"], capture_output=True, text=True)
+                if res.returncode != 0:
+                    if os.path.exists(backup_path):
+                        shutil.copy2(backup_path, conf_path)
+                    return False, f"Nginx test failed: {res.stderr}"
+                subprocess.run(["systemctl", "reload", "nginx"], check=False)
+            except Exception as ex:
+                if os.path.exists(backup_path):
+                    shutil.copy2(backup_path, conf_path)
+                return False, str(ex)
+
+        set_system_config("panel_path", clean_path)
+        return True, clean_path
+    except Exception as e:
+        return False, str(e)
+
 # ================= Admin Management Routes =================
 
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
-    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.accept_mimetypes.best == "application/json"
     if request.method == "POST":
-        curr_pass = request.form.get("current_password", "").strip()
-        new_pass = request.form.get("new_password", "").strip()
-        confirm_pass = request.form.get("confirm_password", "").strip()
+        return update_credentials()
         
-        if not curr_pass or not new_pass:
+    vpn_status = (get_system_config("vpn_enabled", "1") == "1")
+    cur_path = get_system_config("panel_path", "")
+    return render_template("settings.html", vpn_enabled=vpn_status, panel_path=cur_path)
+
+@app.route("/settings/update-credentials", methods=["POST"])
+@login_required
+def update_credentials():
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.accept_mimetypes.best == "application/json"
+    curr_user = session.get("admin_user", "")
+    new_user = request.form.get("new_username", "").strip()
+    curr_pass = request.form.get("current_password", "").strip()
+    new_pass = request.form.get("new_password", "").strip()
+    confirm_pass = request.form.get("confirm_password", "").strip()
+
+    if not curr_pass:
+        msg = "Current password is required to update credentials!"
+        if is_ajax:
+            return jsonify({"success": False, "error": msg}), 400
+        flash(msg, "danger")
+        return redirect(url_for("settings"))
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM admin WHERE username = ?", (curr_user,))
+    admin = cursor.fetchone()
+
+    if not admin or not check_password_hash(admin["password_hash"], curr_pass):
+        conn.close()
+        msg = "Current password is incorrect!"
+        if is_ajax:
+            return jsonify({"success": False, "error": msg}), 400
+        flash(msg, "danger")
+        return redirect(url_for("settings"))
+
+    updates = []
+    params = []
+    
+    # Check username change
+    if new_user and new_user != curr_user:
+        new_user = re.sub(r'[^a-zA-Z0-9_@.-]', '', new_user)
+        if len(new_user) < 3:
+            conn.close()
+            msg = "Username must be at least 3 characters long!"
             if is_ajax:
-                return jsonify({"success": False, "error": "All password fields are required!"}), 400
-            flash("All password fields are required!", "danger")
+                return jsonify({"success": False, "error": msg}), 400
+            flash(msg, "danger")
             return redirect(url_for("settings"))
             
-        if new_pass != confirm_pass:
+        cursor.execute("SELECT id FROM admin WHERE username = ? AND id != ?", (new_user, admin["id"]))
+        if cursor.fetchone():
+            conn.close()
+            msg = f"Username '{new_user}' is already taken!"
             if is_ajax:
-                return jsonify({"success": False, "error": "New passwords do not match!"}), 400
-            flash("New passwords do not match!", "danger")
+                return jsonify({"success": False, "error": msg}), 400
+            flash(msg, "danger")
+            return redirect(url_for("settings"))
+            
+        updates.append("username = ?")
+        params.append(new_user)
+
+    # Check password change
+    if new_pass:
+        if new_pass != confirm_pass:
+            conn.close()
+            msg = "New passwords do not match!"
+            if is_ajax:
+                return jsonify({"success": False, "error": msg}), 400
+            flash(msg, "danger")
             return redirect(url_for("settings"))
 
         if len(new_pass) < 4:
+            conn.close()
+            msg = "New password must be at least 4 characters long!"
             if is_ajax:
-                return jsonify({"success": False, "error": "Password must be at least 4 characters long!"}), 400
-            flash("Password must be at least 4 characters long!", "danger")
+                return jsonify({"success": False, "error": msg}), 400
+            flash(msg, "danger")
             return redirect(url_for("settings"))
-            
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM admin WHERE username = ?", (session["admin_user"],))
-        admin = cursor.fetchone()
-        
-        if admin and check_password_hash(admin["password_hash"], curr_pass):
-            new_hash = generate_password_hash(new_pass)
-            cursor.execute("UPDATE admin SET password_hash = ? WHERE id = ?", (new_hash, admin["id"]))
-            conn.commit()
-            conn.close()
-            if is_ajax:
-                return jsonify({"success": True, "message": "Admin password updated successfully!"})
-            flash("Admin password updated successfully!", "success")
-        else:
-            conn.close()
-            if is_ajax:
-                return jsonify({"success": False, "error": "Current password is incorrect!"}), 400
-            flash("Current password is incorrect!", "danger")
+
+        updates.append("password_hash = ?")
+        params.append(generate_password_hash(new_pass))
+
+    if not updates:
+        conn.close()
+        msg = "No changes were submitted."
+        if is_ajax:
+            return jsonify({"success": False, "error": msg}), 400
+        flash(msg, "info")
         return redirect(url_for("settings"))
-        
-    vpn_status = (get_system_config("vpn_enabled", "1") == "1")
-    return render_template("settings.html", vpn_enabled=vpn_status)
+
+    params.append(admin["id"])
+    cursor.execute(f"UPDATE admin SET {', '.join(updates)} WHERE id = ?", tuple(params))
+    conn.commit()
+    conn.close()
+
+    # Invalidate session to require re-login
+    session.clear()
+
+    msg = "Credentials updated successfully. Please log in with your new credentials."
+    if is_ajax:
+        return jsonify({
+            "success": True,
+            "message": msg,
+            "require_login": True,
+            "redirect_url": url_for("login")
+        })
+    flash(msg, "success")
+    return redirect(url_for("login"))
+
+@app.route("/settings/update-path", methods=["POST"])
+@login_required
+def update_path():
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.accept_mimetypes.best == "application/json"
+    new_path = request.form.get("new_path", "").strip()
+
+    ok, result = update_nginx_panel_path(new_path)
+    if not ok:
+        if is_ajax:
+            return jsonify({"success": False, "error": f"Failed to update panel path: {result}"}), 500
+        flash(f"Failed to update panel path: {result}", "danger")
+        return redirect(url_for("settings"))
+
+    clean_path = result
+    domain = get_system_config("server_domain", SERVER_DOMAIN)
+    port = get_system_config("panel_port", "443")
+    
+    conf_path = "/etc/nginx/sites-available/ike-ui"
+    if os.path.exists(conf_path):
+        try:
+            with open(conf_path, "r") as f:
+                content = f.read()
+                m_dom = re.search(r'server_name\s+([^;]+);', content)
+                if m_dom:
+                    domain = m_dom.group(1).strip()
+                m_port = re.search(r'listen\s+([0-9]+)\s+ssl', content)
+                if m_port:
+                    port = m_port.group(1).strip()
+        except Exception:
+            pass
+
+    port_str = f":{port}" if str(port) != "443" else ""
+    path_str = f"/{clean_path}" if clean_path else ""
+    new_full_url = f"https://{domain}{port_str}{path_str}/"
+
+    msg = "Panel secret path updated successfully! Redirecting to new path..."
+    if is_ajax:
+        return jsonify({
+            "success": True,
+            "message": msg,
+            "new_path": clean_path,
+            "redirect_url": new_full_url
+        })
+    flash(msg, "success")
+    return redirect(new_full_url)
 
 @app.route("/settings/toggle-vpn", methods=["POST"])
 @login_required

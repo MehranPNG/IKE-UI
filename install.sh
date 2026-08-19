@@ -2,7 +2,7 @@
 set -e
 
 REPO_URL="https://github.com/MehranPNG/IKE-UI.git"
-APP_VERSION="1.4.5"
+APP_VERSION="1.4.6"
 INSTALL_DIR="/opt/ike-ui"
 PANEL_DIR="${INSTALL_DIR}/panel"
 DB_DIR="/etc/strongswan-panel"
@@ -38,18 +38,21 @@ is_port_in_use() {
     if [ -z "$p" ]; then
         return 1
     fi
+    local proc=""
     if command -v ss >/dev/null 2>&1; then
-        if ss -tulpn 2>/dev/null | grep -qE "[: ]${p}\b"; then
-            return 0
-        fi
+        proc=$(ss -tulpn 2>/dev/null | grep -E "[: ]${p}\b" || true)
     elif command -v netstat >/dev/null 2>&1; then
-        if netstat -tuln 2>/dev/null | grep -qE "[: ]${p}\b"; then
-            return 0
-        fi
+        proc=$(netstat -tulpn 2>/dev/null | grep -E "[: ]${p}\b" || true)
     elif command -v lsof >/dev/null 2>&1; then
-        if lsof -iTCP:"${p}" -sTCP:LISTEN >/dev/null 2>&1; then
-            return 0
+        proc=$(lsof -iTCP:"${p}" -sTCP:LISTEN 2>/dev/null || true)
+    fi
+
+    if [ -n "$proc" ]; then
+        # If the port is only used by nginx, it is safe to reconfigure Nginx
+        if echo "$proc" | grep -qv "nginx"; then
+            return 0 # Occupied by a non-nginx service
         fi
+        return 1 # Only nginx is using it
     fi
 
     # Fallback to python socket test
@@ -70,36 +73,36 @@ except Exception:
 
 get_current_domain() {
     local d=""
-    if [ -f "${DB_PATH}" ]; then
+    if [ -f /etc/nginx/sites-available/ike-ui ]; then
+        d=$(grep -oP 'server_name\s+\K[^;]+' /etc/nginx/sites-available/ike-ui 2>/dev/null | head -n1 | tr -d ' ' || true)
+    fi
+    if [ -z "$d" ] && [ -f "${DB_PATH}" ]; then
         d=$(sqlite3 "${DB_PATH}" "SELECT value FROM system_config WHERE key='server_domain';" 2>/dev/null || true)
     fi
     if [ -z "$d" ] && [ -f /etc/systemd/system/ike-ui.service ]; then
         d=$(grep -oP 'Environment="SERVER_DOMAIN=\K[^"]+' /etc/systemd/system/ike-ui.service 2>/dev/null || true)
-    fi
-    if [ -z "$d" ] && [ -f /etc/nginx/sites-available/ike-ui ]; then
-        d=$(grep -oP 'server_name\s+\K[^;]+' /etc/nginx/sites-available/ike-ui 2>/dev/null | head -n1 | tr -d ' ' || true)
     fi
     echo "$d"
 }
 
 get_current_port() {
     local p=""
-    if [ -f "${DB_PATH}" ]; then
-        p=$(sqlite3 "${DB_PATH}" "SELECT value FROM system_config WHERE key='panel_port';" 2>/dev/null || true)
-    fi
-    if [ -z "$p" ] && [ -f /etc/nginx/sites-available/ike-ui ]; then
+    if [ -f /etc/nginx/sites-available/ike-ui ]; then
         p=$(grep -oP 'listen\s+\K[0-9]+(?=\s+ssl)' /etc/nginx/sites-available/ike-ui 2>/dev/null | head -n1 || true)
+    fi
+    if [ -z "$p" ] && [ -f "${DB_PATH}" ]; then
+        p=$(sqlite3 "${DB_PATH}" "SELECT value FROM system_config WHERE key='panel_port';" 2>/dev/null || true)
     fi
     echo "${p:-443}"
 }
 
 get_current_path() {
     local path=""
-    if [ -f "${DB_PATH}" ]; then
-        path=$(sqlite3 "${DB_PATH}" "SELECT value FROM system_config WHERE key='panel_path';" 2>/dev/null || true)
-    fi
-    if [ -z "$path" ] && [ -f /etc/nginx/sites-available/ike-ui ]; then
+    if [ -f /etc/nginx/sites-available/ike-ui ]; then
         path=$(grep -oP 'location\s+/\K[^/{\s]+(?=/\s*\{)' /etc/nginx/sites-available/ike-ui 2>/dev/null | head -n1 || true)
+    fi
+    if [ -z "$path" ] && [ -f "${DB_PATH}" ]; then
+        path=$(sqlite3 "${DB_PATH}" "SELECT value FROM system_config WHERE key='panel_path';" 2>/dev/null || true)
     fi
     echo "$path"
 }
@@ -1013,7 +1016,8 @@ change_panel_path() {
     systemctl reload nginx
 
     if [ -f "${DB_PATH}" ]; then
-        sqlite3 "${DB_PATH}" "INSERT INTO system_config (key, value) VALUES ('panel_path', '${NEW_PATH}') ON CONFLICT(key) DO UPDATE SET value = excluded.value;" 2>/dev/null || true
+        sqlite3 "${DB_PATH}" "INSERT INTO system_config (key, value) VALUES ('panel_path', '${NEW_PATH}') ON CONFLICT(key) DO UPDATE SET value = excluded.value;" 2>/dev/null || \
+        python3 -c "import sqlite3; conn=sqlite3.connect('${DB_PATH}'); cursor=conn.cursor(); cursor.execute(\"INSERT INTO system_config (key, value) VALUES ('panel_path', '${NEW_PATH}') ON CONFLICT(key) DO UPDATE SET value = excluded.value\"); conn.commit(); conn.close()" 2>/dev/null || true
     fi
 
     local new_path_str=""
@@ -1099,7 +1103,8 @@ change_panel_port() {
     systemctl reload nginx
 
     if [ -f "${DB_PATH}" ]; then
-        sqlite3 "${DB_PATH}" "INSERT INTO system_config (key, value) VALUES ('panel_port', '${NEW_PORT}') ON CONFLICT(key) DO UPDATE SET value = excluded.value;" 2>/dev/null || true
+        sqlite3 "${DB_PATH}" "INSERT INTO system_config (key, value) VALUES ('panel_port', '${NEW_PORT}') ON CONFLICT(key) DO UPDATE SET value = excluded.value;" 2>/dev/null || \
+        python3 -c "import sqlite3; conn=sqlite3.connect('${DB_PATH}'); cursor=conn.cursor(); cursor.execute(\"INSERT INTO system_config (key, value) VALUES ('panel_port', '${NEW_PORT}') ON CONFLICT(key) DO UPDATE SET value = excluded.value\"); conn.commit(); conn.close()" 2>/dev/null || true
     fi
 
     local new_port_str=""
@@ -1243,7 +1248,8 @@ change_server_domain() {
         sed -i "s|Environment=\"SERVER_DOMAIN=.*\"|Environment=\"SERVER_DOMAIN=${NEW_DOMAIN}\"|g" /etc/systemd/system/ike-ui.service
     fi
     if [ -f "${DB_PATH}" ]; then
-        sqlite3 "${DB_PATH}" "INSERT INTO system_config (key, value) VALUES ('server_domain', '${NEW_DOMAIN}') ON CONFLICT(key) DO UPDATE SET value = excluded.value;" 2>/dev/null || true
+        sqlite3 "${DB_PATH}" "INSERT INTO system_config (key, value) VALUES ('server_domain', '${NEW_DOMAIN}') ON CONFLICT(key) DO UPDATE SET value = excluded.value;" 2>/dev/null || \
+        python3 -c "import sqlite3; conn=sqlite3.connect('${DB_PATH}'); cursor=conn.cursor(); cursor.execute(\"INSERT INTO system_config (key, value) VALUES ('server_domain', '${NEW_DOMAIN}') ON CONFLICT(key) DO UPDATE SET value = excluded.value\"); conn.commit(); conn.close()" 2>/dev/null || true
     fi
 
     generate_nginx_config "$NEW_DOMAIN" "$cur_port" "$cur_path"

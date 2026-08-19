@@ -88,13 +88,14 @@
                 </div>
             </div>
 
-            <!-- Admin Security & Credentials Card -->
+            <!-- Admin Security & Panel Access Card -->
             <div class="card settings-card">
                 <div class="card-header">
-                    <h2>Admin Security & Credentials</h2>
-                    <p>Manage panel access password and credentials</p>
+                    <h2>Admin Security & Panel Access</h2>
+                    <p>Manage administrator credentials and web panel access path</p>
                 </div>
-                <div class="card-body">
+                <div class="card-body settings-card-body-stack">
+                    <!-- Admin Credentials Row -->
                     <div class="settings-row">
                         <div class="settings-row-info">
                             <div class="settings-row-label">
@@ -106,16 +107,43 @@
                                 <span class="settings-badge-admin">{{ current_admin }}</span>
                             </div>
                             <div class="settings-row-desc">
-                                Update the password used to authenticate into this management panel.
+                                Update administrator username or password. Modifying credentials will require signing in again.
                             </div>
                         </div>
 
                         <div class="settings-row-action">
-                            <button type="button" class="btn btn-primary" onclick="openPasswordModal()">
+                            <button type="button" class="btn btn-primary" onclick="openCredentialsModal()">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
                                 </svg>
-                                Change Password
+                                Change Credentials
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Panel Secret Path Row -->
+                    <div class="settings-row">
+                        <div class="settings-row-info">
+                            <div class="settings-row-label">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-purple, #a855f7);">
+                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                                </svg>
+                                <span class="settings-row-title">Panel Secret Path</span>
+                                <span class="settings-badge-cyan">{% if panel_path %}/{{ panel_path }}{% else %}/ (Root){% endif %}</span>
+                            </div>
+                            <div class="settings-row-desc">
+                                Customize the secret URL path prefix required to access this web management panel.
+                            </div>
+                        </div>
+
+                        <div class="settings-row-action">
+                            <button type="button" class="btn btn-secondary" onclick="openPathModal()">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                </svg>
+                                Change Path
                             </button>
                         </div>
                     </div>
@@ -221,31 +249,63 @@
         </div>
     </div>
 
-    <!-- Change Password Modal -->
-    <div id="passwordModal" class="modal">
+    <!-- Change Admin Credentials Modal -->
+    <div id="credentialsModal" class="modal">
         <div class="modal-content" style="max-width: 440px;">
             <div class="modal-header">
-                <h3>Change Admin Password</h3>
-                <button class="btn-close" onclick="closePasswordModal()">&times;</button>
+                <h3>Admin Credentials</h3>
+                <button class="btn-close" onclick="closeCredentialsModal()">&times;</button>
             </div>
-            <form id="changePasswordForm" novalidate onsubmit="submitPasswordChange(event)">
+            <form id="changeCredentialsForm" novalidate onsubmit="submitCredentialsChange(event)">
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>Current Password</label>
+                        <label>Admin Username</label>
+                        <input type="text" id="new_username" name="new_username" value="{{ current_admin }}" placeholder="admin" autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label>Current Password <span style="color: var(--danger);">*</span></label>
                         <input type="password" id="current_password" name="current_password" placeholder="••••••••" autocomplete="current-password" autofocus>
                     </div>
                     <div class="form-group">
-                        <label>New Password</label>
+                        <label>New Password <span style="color: var(--text-muted); font-size: 0.75rem; font-weight: normal;">(leave blank to keep unchanged)</span></label>
                         <input type="password" id="new_password" name="new_password" placeholder="••••••••" autocomplete="new-password">
                     </div>
                     <div class="form-group">
                         <label>Confirm New Password</label>
                         <input type="password" id="confirm_password" name="confirm_password" placeholder="••••••••" autocomplete="new-password">
                     </div>
+                    <div style="background: rgba(255, 170, 0, 0.08); border: 1px solid rgba(255, 170, 0, 0.25); border-radius: 8px; padding: 10px 12px; font-size: 0.8rem; color: var(--accent-yellow); margin-top: 8px;">
+                        Changing your username or password will invalidate your session and require logging in again.
+                    </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" onclick="closePasswordModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="btnPasswordSubmit">Update Password</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeCredentialsModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btnCredentialsSubmit">Update Credentials</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Change Panel Path Modal -->
+    <div id="pathModal" class="modal">
+        <div class="modal-content" style="max-width: 440px;">
+            <div class="modal-header">
+                <h3>Change Panel Secret Path</h3>
+                <button class="btn-close" onclick="closePathModal()">&times;</button>
+            </div>
+            <form id="changePathForm" novalidate onsubmit="submitPathChange(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Secret Path</label>
+                        <input type="text" id="new_path" name="new_path" value="{{ panel_path }}" placeholder="e.g. mysecret or / for root" autocomplete="off" autofocus>
+                    </div>
+                    <div style="background: rgba(0, 212, 255, 0.08); border: 1px solid rgba(0, 212, 255, 0.25); border-radius: 8px; padding: 10px 12px; font-size: 0.8rem; color: var(--accent-cyan); margin-top: 8px;">
+                        The web server (Nginx) configuration will be updated and your browser will automatically redirect to the new path.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closePathModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btnPathSubmit">Update Path</button>
                 </div>
             </form>
         </div>
@@ -441,24 +501,51 @@
         }
 
         // Modal Functions
-        function openPasswordModal() {
-            document.getElementById('changePasswordForm').reset();
-            clearAllErrors('#changePasswordForm');
-            document.getElementById('passwordModal').style.display = 'flex';
+        function openCredentialsModal() {
+            document.getElementById('changeCredentialsForm').reset();
+            document.getElementById('new_username').value = "{{ current_admin }}";
+            clearAllErrors('#changeCredentialsForm');
+            document.getElementById('credentialsModal').style.display = 'flex';
             document.body.classList.add('modal-open');
             setTimeout(() => {
                 document.getElementById('current_password').focus();
             }, 50);
         }
 
-        function closePasswordModal() {
-            document.getElementById('passwordModal').style.display = 'none';
+        function closeCredentialsModal() {
+            document.getElementById('credentialsModal').style.display = 'none';
             document.body.classList.remove('modal-open');
-            clearAllErrors('#changePasswordForm');
+            clearAllErrors('#changeCredentialsForm');
+        }
+
+        function openPasswordModal() {
+            openCredentialsModal();
+        }
+
+        function closePasswordModal() {
+            closeCredentialsModal();
+        }
+
+        function openPathModal() {
+            document.getElementById('changePathForm').reset();
+            document.getElementById('new_path').value = "{{ panel_path }}";
+            clearAllErrors('#changePathForm');
+            document.getElementById('pathModal').style.display = 'flex';
+            document.body.classList.add('modal-open');
+            setTimeout(() => {
+                document.getElementById('new_path').focus();
+            }, 50);
+        }
+
+        function closePathModal() {
+            document.getElementById('pathModal').style.display = 'none';
+            document.body.classList.remove('modal-open');
+            clearAllErrors('#changePathForm');
         }
 
         window.onclick = function(event) {
-            if (event.target == document.getElementById('passwordModal')) closePasswordModal();
+            if (event.target == document.getElementById('credentialsModal')) closeCredentialsModal();
+            if (event.target == document.getElementById('pathModal')) closePathModal();
             if (event.target == document.getElementById('confirmVpnModal')) cancelVpnToggle();
             if (event.target == document.getElementById('restoreModal')) closeRestoreModal();
         }
@@ -679,16 +766,22 @@
             form.querySelectorAll('.field-error').forEach(el => el.remove());
         }
 
-        document.querySelectorAll('#changePasswordForm input').forEach(input => {
+        document.querySelectorAll('#changeCredentialsForm input').forEach(input => {
             input.addEventListener('input', () => clearFieldError(input));
         });
 
-        async function submitPasswordChange(e) {
+        document.querySelectorAll('#changePathForm input').forEach(input => {
+            input.addEventListener('input', () => clearFieldError(input));
+        });
+
+        async function submitCredentialsChange(e) {
             e.preventDefault();
+            const userInput = document.getElementById('new_username');
             const curInput = document.getElementById('current_password');
             const newInput = document.getElementById('new_password');
             const confInput = document.getElementById('confirm_password');
 
+            clearFieldError(userInput);
             clearFieldError(curInput);
             clearFieldError(newInput);
             clearFieldError(confInput);
@@ -699,37 +792,40 @@
                 valid = false;
             }
 
-            if (!newInput.value) {
-                showFieldError(newInput, 'New password is required');
-                valid = false;
-            } else if (newInput.value.length < 4) {
-                showFieldError(newInput, 'Password must be at least 4 characters');
+            if (userInput.value && userInput.value.length < 3) {
+                showFieldError(userInput, 'Username must be at least 3 characters');
                 valid = false;
             }
 
-            if (!confInput.value) {
-                showFieldError(confInput, 'Please confirm new password');
-                valid = false;
-            } else if (newInput.value && confInput.value !== newInput.value) {
-                showFieldError(confInput, 'Passwords do not match');
-                valid = false;
+            if (newInput.value) {
+                if (newInput.value.length < 4) {
+                    showFieldError(newInput, 'Password must be at least 4 characters');
+                    valid = false;
+                }
+                if (!confInput.value) {
+                    showFieldError(confInput, 'Please confirm new password');
+                    valid = false;
+                } else if (confInput.value !== newInput.value) {
+                    showFieldError(confInput, 'Passwords do not match');
+                    valid = false;
+                }
             }
 
             if (!valid) {
-                const firstErr = document.querySelector('#changePasswordForm .input-error');
+                const firstErr = document.querySelector('#changeCredentialsForm .input-error');
                 if (firstErr) firstErr.focus();
                 return;
             }
 
-            const btn = document.getElementById('btnPasswordSubmit');
+            const btn = document.getElementById('btnCredentialsSubmit');
             btn.disabled = true;
             btn.innerText = 'Updating...';
 
-            const form = document.getElementById('changePasswordForm');
+            const form = document.getElementById('changeCredentialsForm');
             const formData = new FormData(form);
 
             try {
-                const response = await fetch(`${BASE_PATH}/settings`, {
+                const response = await fetch(`${BASE_PATH}/settings/update-credentials`, {
                     method: 'POST',
                     headers: { 'X-Requested-With': 'XMLHttpRequest' },
                     body: formData
@@ -737,16 +833,58 @@
                 const res = await response.json();
 
                 if (res.success) {
-                    closePasswordModal();
-                    showToast(res.message || 'Password updated successfully!', 'success');
+                    closeCredentialsModal();
+                    showToast(res.message || 'Credentials updated successfully!', 'success', 3500);
+                    if (res.require_login) {
+                        setTimeout(() => {
+                            window.location.href = res.redirect_url || `${BASE_PATH}/login`;
+                        }, 1200);
+                    }
                 } else {
-                    showToast(res.error || 'Failed to update password', 'error');
+                    showToast(res.error || 'Failed to update credentials', 'error');
                 }
             } catch (err) {
-                showToast('Connection error occurred while updating password.', 'error');
+                showToast('Connection error occurred while updating credentials.', 'error');
             } finally {
                 btn.disabled = false;
-                btn.innerText = 'Update Password';
+                btn.innerText = 'Update Credentials';
+            }
+        }
+
+        async function submitPathChange(e) {
+            e.preventDefault();
+            const pathInput = document.getElementById('new_path');
+            clearFieldError(pathInput);
+
+            const btn = document.getElementById('btnPathSubmit');
+            btn.disabled = true;
+            btn.innerText = 'Updating & Reloading Nginx...';
+
+            const form = document.getElementById('changePathForm');
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch(`${BASE_PATH}/settings/update-path`, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                });
+                const res = await response.json();
+
+                if (res.success) {
+                    closePathModal();
+                    showToast(res.message || 'Path updated! Redirecting...', 'success', 3500);
+                    setTimeout(() => {
+                        window.location.href = res.redirect_url;
+                    }, 1000);
+                } else {
+                    showToast(res.error || 'Failed to update path', 'error');
+                }
+            } catch (err) {
+                showToast('Connection error occurred while updating path.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Update Path';
             }
         }
 
