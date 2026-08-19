@@ -2,7 +2,7 @@
 set -e
 
 REPO_URL="https://github.com/MehranPNG/IKE-UI.git"
-APP_VERSION="1.4.3"
+APP_VERSION="1.4.4"
 INSTALL_DIR="/opt/ike-ui"
 PANEL_DIR="${INSTALL_DIR}/panel"
 DB_DIR="/etc/strongswan-panel"
@@ -29,7 +29,7 @@ show_banner() {
         disk_ver=$(grep -oP '^APP_VERSION=["\x27]?\K[^"\x27\s]+' "${INSTALL_DIR}/install.sh" 2>/dev/null || true)
         if [ -n "$disk_ver" ]; then
             cur_ver="$disk_ver"
-            APP_VERSION="1.4.3"
+            APP_VERSION="1.4.4"
         fi
     fi
     echo -e "${PURPLE}${BOLD}"
@@ -180,6 +180,16 @@ install_all() {
     show_banner
     detect_network
 
+    if [ -f /etc/systemd/system/ike-ui.service ] || [ -f "${DB_PATH}" ] || [ -d "${PANEL_DIR}" ]; then
+        echo -e "${YELLOW}[!] Warning: IKE-UI is already installed on this server.${NC}"
+        read -rp "Are you sure you want to reinstall / re-deploy? [y/N]: " confirm_reinstall
+        if [[ ! "$confirm_reinstall" =~ ^[yY]([eE][sS])?$ ]]; then
+            echo -e "${YELLOW}[*] Reinstallation cancelled.${NC}"
+            return 0 2>/dev/null || exit 0
+        fi
+        echo ""
+    fi
+
     echo -e "${YELLOW}[*] Primary Network Interface:${NC} ${BOLD}${NET_IFACE}${NC}"
     echo -e "${YELLOW}[*] Public IP Address:${NC} ${BOLD}${SERVER_IP}${NC}"
     echo ""
@@ -201,6 +211,18 @@ install_all() {
 
     read -rp "Enter Admin Password [default: admin123]: " ADMIN_PASS
     ADMIN_PASS=${ADMIN_PASS:-admin123}
+
+    echo ""
+    echo -e "${YELLOW}[*] Installation Summary:${NC}"
+    echo -e "  • Domain:     ${CYAN}${DOMAIN}${NC}"
+    echo -e "  • Admin User: ${CYAN}${ADMIN_USER}${NC}"
+    echo -e "  • IP/Iface:   ${CYAN}${SERVER_IP} (${NET_IFACE})${NC}"
+    echo ""
+    read -rp "Ready to proceed with installation? [y/N]: " confirm_install
+    if [[ ! "$confirm_install" =~ ^[yY]([eE][sS])?$ ]]; then
+        echo -e "${YELLOW}[*] Installation cancelled.${NC}"
+        return 0 2>/dev/null || exit 0
+    fi
 
     echo ""
     echo -e "${CYAN}[1/7] Installing dependencies...${NC}"
@@ -488,6 +510,18 @@ update_ike_ui() {
     fi
 
     echo ""
+    local channel_name="Latest Tagged Release (Stable)"
+    if [[ "$target_channel" == "dev" || "$target_channel" == "main" || "$target_channel" == "commit" || "$target_channel" == "2" ]]; then
+        channel_name="Latest Commit (Dev / main branch)"
+    fi
+    echo -e "${YELLOW}[*] Target Update Channel:${NC} ${CYAN}${channel_name}${NC}"
+    read -rp "Are you sure you want to proceed with update? [y/N]: " confirm_update
+    if [[ ! "$confirm_update" =~ ^[yY]([eE][sS])?$ ]]; then
+        echo -e "${YELLOW}[*] Update cancelled.${NC}"
+        return 0 2>/dev/null || exit 0
+    fi
+
+    echo ""
     if ! command -v git >/dev/null 2>&1; then
         echo -e "${YELLOW}[*] Installing git...${NC}"
         apt-get update -y && apt-get install -y git
@@ -579,7 +613,7 @@ app.init_db()
         new_ver=$(grep -oP '^APP_VERSION\s*=\s*["\x27]?\K[^"\x27\s]+' "${INSTALL_DIR}/panel/app.py" 2>/dev/null || true)
     fi
     if [ -n "$new_ver" ]; then
-        APP_VERSION="1.4.3"
+        APP_VERSION="1.4.4"
     fi
 
     if systemctl is-active --quiet ike-ui.service; then
@@ -717,6 +751,20 @@ uninstall_all() {
     echo ""
     read -rp "Do you want to delete user database & credentials (/etc/strongswan-panel)? [y/N]: " del_db
 
+    echo ""
+    echo -e "${RED}${BOLD}[!] Final Confirmation:${NC}"
+    if [[ "$del_db" =~ ^[yY]([eE][sS])?$ ]]; then
+        echo -e "    ${RED}WARNING: All IKE-UI files, services, and user database will be permanently deleted.${NC}"
+    else
+        echo -e "    ${YELLOW}All IKE-UI services and files will be removed. Database will be preserved at ${DB_DIR}.${NC}"
+    fi
+    read -rp "Are you completely sure you want to execute uninstallation now? [y/N]: " confirm_final_uninstall
+    if [[ ! "$confirm_final_uninstall" =~ ^[yY]([eE][sS])?$ ]]; then
+        echo -e "${YELLOW}[*] Uninstallation cancelled.${NC}"
+        return 0 2>/dev/null || exit 0
+    fi
+
+    echo ""
     echo -e "${CYAN}[*] Stopping and disabling services...${NC}"
     systemctl stop ike-ui 2>/dev/null || true
     systemctl disable ike-ui 2>/dev/null || true
@@ -802,7 +850,11 @@ menu() {
         echo ""
         read -rp "Enter your choice [0-10]: " choice
         case $choice in
-            1) install_all; break ;;
+            1) 
+                install_all
+                echo ""
+                read -rp "Press Enter to continue..."
+                ;;
             2) 
                 update_ike_ui
                 echo ""
@@ -820,7 +872,11 @@ menu() {
             7) view_logs ;;
             8) reset_admin_credentials; read -rp "Press Enter to continue..." ;;
             9) renew_ssl; read -rp "Press Enter to continue..." ;;
-            10) uninstall_all ;;
+            10) 
+                uninstall_all
+                echo ""
+                read -rp "Press Enter to continue..."
+                ;;
             0) exit 0 ;;
             *) echo -e "${RED}Invalid option.${NC}"; sleep 1 ;;
         esac
