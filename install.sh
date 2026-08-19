@@ -857,6 +857,73 @@ app.init_db()
 "
     echo -e "${GREEN}[+] Database schema verified and updated.${NC}"
 
+    local cur_dom
+    cur_dom=$(get_current_domain)
+    if [ -n "$cur_dom" ] && [ -d "/etc/letsencrypt/live/${cur_dom}" ]; then
+        mkdir -p /etc/ipsec.d/certs /etc/ipsec.d/cacerts /etc/ipsec.d/private
+        if [ -f "/etc/letsencrypt/live/${cur_dom}/fullchain.pem" ]; then
+            cp "/etc/letsencrypt/live/${cur_dom}/fullchain.pem" /etc/ipsec.d/certs/cert.pem
+        fi
+        rm -f /etc/ipsec.d/cacerts/*
+        if [ -f "/etc/letsencrypt/live/${cur_dom}/chain.pem" ]; then
+            python3 -c "
+import re
+with open('/etc/letsencrypt/live/${cur_dom}/chain.pem', 'r') as f:
+    text = f.read()
+certs = re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', text, re.DOTALL)
+if certs:
+    for i, c in enumerate(certs):
+        with open(f'/etc/ipsec.d/cacerts/chain_{i}.pem', 'w') as out:
+            out.write(c.strip() + '\n')
+else:
+    with open('/etc/ipsec.d/cacerts/chain.pem', 'w') as out:
+        out.write(text)
+" 2>/dev/null || cp "/etc/letsencrypt/live/${cur_dom}/chain.pem" /etc/ipsec.d/cacerts/chain.pem
+        fi
+        chmod 600 /etc/ipsec.d/private/privkey.pem 2>/dev/null || true
+        chmod 644 /etc/ipsec.d/certs/cert.pem /etc/ipsec.d/cacerts/* 2>/dev/null || true
+        ipsec reload 2>/dev/null || true
+        ipsec rereadsecrets 2>/dev/null || true
+
+        mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+        cat > /etc/letsencrypt/renewal-hooks/deploy/strongswan.sh << 'RENEW_EOF'
+#!/usr/bin/env bash
+for domain_dir in /etc/letsencrypt/live/*; do
+    if [ -d "$domain_dir" ] && { [ -f "$domain_dir/fullchain.pem" ] || [ -f "$domain_dir/cert.pem" ]; }; then
+        if [ -f "$domain_dir/fullchain.pem" ]; then
+            cp "$domain_dir/fullchain.pem" /etc/ipsec.d/certs/cert.pem
+        else
+            cp "$domain_dir/cert.pem" /etc/ipsec.d/certs/cert.pem
+        fi
+        cp "$domain_dir/privkey.pem" /etc/ipsec.d/private/privkey.pem
+        rm -f /etc/ipsec.d/cacerts/*
+        if [ -f "$domain_dir/chain.pem" ]; then
+            python3 -c "
+import re
+with open('$domain_dir/chain.pem', 'r') as f:
+    text = f.read()
+certs = re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', text, re.DOTALL)
+if certs:
+    for i, c in enumerate(certs):
+        with open(f'/etc/ipsec.d/cacerts/chain_{i}.pem', 'w') as out:
+            out.write(c.strip() + '\n')
+else:
+    with open('/etc/ipsec.d/cacerts/chain.pem', 'w') as out:
+        out.write(text)
+" 2>/dev/null || cp "$domain_dir/chain.pem" /etc/ipsec.d/cacerts/chain.pem
+        fi
+        chmod 600 /etc/ipsec.d/private/privkey.pem
+        chmod 644 /etc/ipsec.d/certs/cert.pem /etc/ipsec.d/cacerts/* 2>/dev/null || true
+        ipsec reload 2>/dev/null || true
+        ipsec rereadsecrets 2>/dev/null || true
+        systemctl reload nginx 2>/dev/null || true
+        break
+    fi
+done
+RENEW_EOF
+        chmod +x /etc/letsencrypt/renewal-hooks/deploy/strongswan.sh
+    fi
+
     echo -e "${CYAN}[4/4] Restarting IKE-UI panel service...${NC}"
     if [ -f /etc/systemd/system/ike-ui.service ]; then
         sed -i 's|gunicorn .* app:app|gunicorn --workers 2 --threads 8 --worker-class gthread --worker-connections 1000 --timeout 30 --graceful-timeout 2 -b 127.0.0.1:8000 app:app|g' /etc/systemd/system/ike-ui.service
