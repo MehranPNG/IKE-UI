@@ -2,7 +2,7 @@
 set -e
 
 REPO_URL="https://github.com/MehranPNG/IKE-UI.git"
-APP_VERSION="1.5.0"
+APP_VERSION="1.5.1"
 INSTALL_DIR="/opt/ike-ui"
 PANEL_DIR="${INSTALL_DIR}/panel"
 DB_DIR="/etc/strongswan-panel"
@@ -511,23 +511,61 @@ install_all() {
 
     echo -e "${CYAN}[3/7] Setting up certificates and auto-renewal hook...${NC}"
     mkdir -p /etc/ipsec.d/certs /etc/ipsec.d/cacerts /etc/ipsec.d/private
-    cp "/etc/letsencrypt/live/${DOMAIN}/cert.pem" /etc/ipsec.d/certs/cert.pem
-    cp "/etc/letsencrypt/live/${DOMAIN}/chain.pem" /etc/ipsec.d/cacerts/chain.pem
+    if [ -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
+        cp "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" /etc/ipsec.d/certs/cert.pem
+    else
+        cp "/etc/letsencrypt/live/${DOMAIN}/cert.pem" /etc/ipsec.d/certs/cert.pem
+    fi
     cp "/etc/letsencrypt/live/${DOMAIN}/privkey.pem" /etc/ipsec.d/private/privkey.pem
+    rm -f /etc/ipsec.d/cacerts/*
+    if [ -f "/etc/letsencrypt/live/${DOMAIN}/chain.pem" ]; then
+        python3 -c "
+import re
+with open('/etc/letsencrypt/live/${DOMAIN}/chain.pem', 'r') as f:
+    text = f.read()
+certs = re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', text, re.DOTALL)
+if certs:
+    for i, c in enumerate(certs):
+        with open(f'/etc/ipsec.d/cacerts/chain_{i}.pem', 'w') as out:
+            out.write(c.strip() + '\n')
+else:
+    with open('/etc/ipsec.d/cacerts/chain.pem', 'w') as out:
+        out.write(text)
+" 2>/dev/null || cp "/etc/letsencrypt/live/${DOMAIN}/chain.pem" /etc/ipsec.d/cacerts/chain.pem
+    fi
 
     chmod 600 /etc/ipsec.d/private/privkey.pem
-    chmod 644 /etc/ipsec.d/certs/cert.pem /etc/ipsec.d/cacerts/chain.pem
+    chmod 644 /etc/ipsec.d/certs/cert.pem /etc/ipsec.d/cacerts/* 2>/dev/null || true
 
     mkdir -p /etc/letsencrypt/renewal-hooks/deploy
     cat > /etc/letsencrypt/renewal-hooks/deploy/strongswan.sh << 'RENEW_EOF'
 #!/usr/bin/env bash
 for domain_dir in /etc/letsencrypt/live/*; do
-    if [ -d "$domain_dir" ] && [ -f "$domain_dir/cert.pem" ]; then
-        cp "$domain_dir/cert.pem" /etc/ipsec.d/certs/cert.pem
-        cp "$domain_dir/chain.pem" /etc/ipsec.d/cacerts/chain.pem
+    if [ -d "$domain_dir" ] && { [ -f "$domain_dir/fullchain.pem" ] || [ -f "$domain_dir/cert.pem" ]; }; then
+        if [ -f "$domain_dir/fullchain.pem" ]; then
+            cp "$domain_dir/fullchain.pem" /etc/ipsec.d/certs/cert.pem
+        else
+            cp "$domain_dir/cert.pem" /etc/ipsec.d/certs/cert.pem
+        fi
         cp "$domain_dir/privkey.pem" /etc/ipsec.d/private/privkey.pem
+        rm -f /etc/ipsec.d/cacerts/*
+        if [ -f "$domain_dir/chain.pem" ]; then
+            python3 -c "
+import re
+with open('$domain_dir/chain.pem', 'r') as f:
+    text = f.read()
+certs = re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', text, re.DOTALL)
+if certs:
+    for i, c in enumerate(certs):
+        with open(f'/etc/ipsec.d/cacerts/chain_{i}.pem', 'w') as out:
+            out.write(c.strip() + '\n')
+else:
+    with open('/etc/ipsec.d/cacerts/chain.pem', 'w') as out:
+        out.write(text)
+" 2>/dev/null || cp "$domain_dir/chain.pem" /etc/ipsec.d/cacerts/chain.pem
+        fi
         chmod 600 /etc/ipsec.d/private/privkey.pem
-        chmod 644 /etc/ipsec.d/certs/cert.pem /etc/ipsec.d/cacerts/chain.pem
+        chmod 644 /etc/ipsec.d/certs/cert.pem /etc/ipsec.d/cacerts/* 2>/dev/null || true
         ipsec reload 2>/dev/null || true
         ipsec rereadsecrets 2>/dev/null || true
         systemctl reload nginx 2>/dev/null || true
@@ -1230,11 +1268,30 @@ change_server_domain() {
 
     echo -e "${CYAN}[3/5] Updating certificate files for StrongSwan...${NC}"
     mkdir -p /etc/ipsec.d/certs /etc/ipsec.d/cacerts /etc/ipsec.d/private
-    cp "/etc/letsencrypt/live/${NEW_DOMAIN}/cert.pem" /etc/ipsec.d/certs/cert.pem
-    cp "/etc/letsencrypt/live/${NEW_DOMAIN}/chain.pem" /etc/ipsec.d/cacerts/chain.pem
+    if [ -f "/etc/letsencrypt/live/${NEW_DOMAIN}/fullchain.pem" ]; then
+        cp "/etc/letsencrypt/live/${NEW_DOMAIN}/fullchain.pem" /etc/ipsec.d/certs/cert.pem
+    else
+        cp "/etc/letsencrypt/live/${NEW_DOMAIN}/cert.pem" /etc/ipsec.d/certs/cert.pem
+    fi
     cp "/etc/letsencrypt/live/${NEW_DOMAIN}/privkey.pem" /etc/ipsec.d/private/privkey.pem
+    rm -f /etc/ipsec.d/cacerts/*
+    if [ -f "/etc/letsencrypt/live/${NEW_DOMAIN}/chain.pem" ]; then
+        python3 -c "
+import re
+with open('/etc/letsencrypt/live/${NEW_DOMAIN}/chain.pem', 'r') as f:
+    text = f.read()
+certs = re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', text, re.DOTALL)
+if certs:
+    for i, c in enumerate(certs):
+        with open(f'/etc/ipsec.d/cacerts/chain_{i}.pem', 'w') as out:
+            out.write(c.strip() + '\n')
+else:
+    with open('/etc/ipsec.d/cacerts/chain.pem', 'w') as out:
+        out.write(text)
+" 2>/dev/null || cp "/etc/letsencrypt/live/${NEW_DOMAIN}/chain.pem" /etc/ipsec.d/cacerts/chain.pem
+    fi
     chmod 600 /etc/ipsec.d/private/privkey.pem
-    chmod 644 /etc/ipsec.d/certs/cert.pem /etc/ipsec.d/cacerts/chain.pem
+    chmod 644 /etc/ipsec.d/certs/cert.pem /etc/ipsec.d/cacerts/* 2>/dev/null || true
 
     echo -e "${CYAN}[4/5] Updating StrongSwan, Systemd, and Nginx configurations...${NC}"
     if [ -f /etc/ipsec.conf ]; then
