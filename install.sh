@@ -2,7 +2,7 @@
 set -e
 
 REPO_URL="https://github.com/MehranPNG/IKE-UI.git"
-APP_VERSION="1.4.6"
+APP_VERSION="1.5.0"
 INSTALL_DIR="/opt/ike-ui"
 PANEL_DIR="${INSTALL_DIR}/panel"
 DB_DIR="/etc/strongswan-panel"
@@ -48,14 +48,12 @@ is_port_in_use() {
     fi
 
     if [ -n "$proc" ]; then
-        # If the port is only used by nginx, it is safe to reconfigure Nginx
         if echo "$proc" | grep -qv "nginx"; then
-            return 0 # Occupied by a non-nginx service
+            return 0
         fi
-        return 1 # Only nginx is using it
+        return 1
     fi
 
-    # Fallback to python socket test
     python3 -c "
 import socket, sys
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -215,7 +213,7 @@ show_banner() {
          IKE-UI Manager v${cur_ver}
 BANNER
     echo -e "${CYAN}====================================================${NC}"
-    
+
     local panel_domain
     panel_domain=$(get_current_domain)
     local panel_port
@@ -625,7 +623,6 @@ if row:
 else:
     cursor.execute('INSERT INTO admin (username, password_hash) VALUES (?, ?)', ('${ADMIN_USER}', generate_password_hash('${ADMIN_PASS}')))
 
-# Store configuration in system_config
 cursor.execute('''
     INSERT INTO system_config (key, value) VALUES ('server_domain', ?)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
@@ -834,7 +831,6 @@ app.init_db()
 
     sleep 1
 
-    # Read newly pulled version
     local new_ver=""
     if [ -f "${INSTALL_DIR}/install.sh" ]; then
         new_ver=$(grep -oP '^APP_VERSION=["\x27]?\K[^"\x27\s]+' "${INSTALL_DIR}/install.sh" 2>/dev/null || true)
@@ -1426,12 +1422,12 @@ menu() {
         echo ""
         read -rp "Enter your choice [0-10]: " choice
         case $choice in
-            1) 
+            1)
                 install_all
                 echo ""
                 read -rp "Press Enter to continue..."
                 ;;
-            2) 
+            2)
                 update_ike_ui
                 echo ""
                 read -rp "Press Enter to return to menu..."
@@ -1448,7 +1444,7 @@ menu() {
             7) view_logs ;;
             8) manage_panel_access ;;
             9) manage_domain_ssl ;;
-            10) 
+            10)
                 uninstall_all
                 echo ""
                 read -rp "Press Enter to continue..."

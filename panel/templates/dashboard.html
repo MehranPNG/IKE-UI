@@ -62,7 +62,6 @@
                 {% endif %}
             {% endwith %}
 
-            <!-- System Resource Grid -->
             <div class="system-grid">
                 <div class="sys-card">
                     <div class="sys-header">
@@ -128,7 +127,6 @@
                 </div>
             </div>
 
-            <!-- Stats Grid -->
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-icon icon-users">
@@ -189,7 +187,6 @@
                 </div>
             </div>
 
-            <!-- Section Header & Search Bar -->
             <div class="section-header">
                 <div class="section-title">
                     <h2>Users</h2>
@@ -211,7 +208,6 @@
                 <input type="text" id="userSearchInput" class="search-input" placeholder="Search users by name or note..." oninput="filterUsersTable()">
             </div>
 
-            <!-- Users Table Card -->
             <div class="card">
                 <div class="table-responsive">
                     <table class="table" id="usersTable">
@@ -347,7 +343,6 @@
                     </table>
                 </div>
 
-                <!-- Table Pagination Footer -->
                 <div class="table-pagination" id="usersPagination">
                     <div class="pagination-left">
                         <span class="pagination-info" id="paginationInfo">Showing 0 of 0 users</span>
@@ -367,7 +362,6 @@
         </main>
     </div>
 
-    <!-- Add User Modal -->
     <div id="addModal" class="modal">
         <div class="modal-content">
             <div id="addFormView">
@@ -513,7 +507,6 @@
         </div>
     </div>
 
-    <!-- Edit User Modal -->
     <div id="editModal" class="modal">
         <div class="modal-content">
             <div id="editFormView">
@@ -531,7 +524,7 @@
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
-                            
+
                             <div id="passwordFieldContainer" style="display: none; margin-top: 1rem; border-top: 1px solid #23273c; padding-top: 0.85rem;">
                                 <div class="label-row">
                                     <label>New Password</label>
@@ -666,7 +659,6 @@
         </div>
     </div>
 
-    <!-- User Info & Live Network Modal -->
     <div id="userInfoModal" class="modal">
         <div class="modal-content info-modal-content" style="max-width: 500px;">
             <div class="modal-header">
@@ -684,9 +676,9 @@
                 </div>
                 <button class="btn-close" onclick="closeUserInfoModal()">&times;</button>
             </div>
-            
+
             <div class="modal-body info-modal-body">
-                <!-- Live Network Card (Shown ONLY when user is Online) -->
+
                 <div id="infoUserLiveNetCard" class="user-live-net-card" style="display: none;">
                     <div class="live-net-header">
                         <div class="live-net-title">
@@ -696,7 +688,7 @@
                             <span>Live Network</span>
                         </div>
                     </div>
-                    
+
                     <div class="live-net-body">
                         <div class="live-net-speed-row">
                             <div class="speed-box speed-down">
@@ -721,7 +713,6 @@
                     </div>
                 </div>
 
-                <!-- Account Overview Card -->
                 <div class="account-overview-card">
                     <div class="account-card-header">
                         <span class="account-card-title">
@@ -774,7 +765,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="modal-footer" style="justify-content: space-between;">
                 <button type="button" class="btn btn-secondary" onclick="closeUserInfoModal()">Close</button>
                 <button type="button" class="btn btn-primary" id="infoModalEditBtn" onclick="onInfoModalEditClick()">
@@ -787,7 +778,6 @@
         </div>
     </div>
 
-    <!-- Custom Confirmation Modal -->
     <div id="confirmModal" class="modal">
         <div class="modal-content" style="max-width: 420px;">
             <div class="modal-body confirm-text-center" style="padding-top: 2rem; padding-bottom: 1.5rem;">
@@ -809,7 +799,6 @@
         </div>
     </div>
 
-    <!-- VPN Disabled Info Modal -->
     <div id="vpnDisabledModal" class="modal">
         <div class="modal-content" style="max-width: 450px;">
             <div class="modal-header">
@@ -834,13 +823,11 @@
         </div>
     </div>
 
-    <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
 
     <script>
         const BASE_PATH = "{{ request.script_root }}";
 
-        // Custom Toast System
         function showToast(message, type = 'error', duration = 3500) {
             const container = document.getElementById('toastContainer');
             if (!container) return;
@@ -883,7 +870,6 @@
             }, 200);
         }
 
-        // Custom Confirmation Modal System
         let onConfirmCallback = null;
         function openConfirmModal(title, message, confirmBtnText, onConfirm) {
             document.getElementById('confirmModalTitle').innerText = title || 'Confirm Action';
@@ -926,7 +912,6 @@
             );
         }
 
-        // Custom Field Validation System
         function showFieldError(input, msg) {
             if (!input) return;
             input.classList.add('input-error');
@@ -1078,7 +1063,6 @@
             if (userUname) userUname.innerText = u.username || 'User Details';
             if (userSub) userSub.innerText = 'Account #' + u.id;
 
-            // 1. Live Network Card (Shown ONLY when user is online)
             const liveNetCard = document.getElementById('infoUserLiveNetCard');
             if (liveNetCard) {
                 if (u.is_online && u.live_net) {
@@ -1097,7 +1081,6 @@
                 }
             }
 
-            // 2. Account Overview Card
             const statusVal = document.getElementById('infoAccountStatusVal');
             const liveVal = document.getElementById('infoLiveStatusVal');
             const lastIpVal = document.getElementById('infoLastIpVal');
@@ -1116,7 +1099,7 @@
                 statusVal.innerHTML = `<span class="status-pill ${u.is_active === 1 ? 'status-active' : 'status-disabled'}">${u.is_active === 1 ? 'Active' : 'Disabled'}</span>`;
             }
             if (liveVal) {
-                liveVal.innerHTML = u.is_online 
+                liveVal.innerHTML = u.is_online
                     ? `<span class="badge badge-online">${u.device_count || 1} / ${maxDev} Online</span>`
                     : `<span class="badge badge-neutral">Offline</span>`;
             }
@@ -1172,7 +1155,7 @@
             if (targetUser) {
                 updateUserInfoModalContent(targetUser);
             }
-            
+
             fetch(`${BASE_PATH}/api/user/info/${userId}`)
                 .then(r => r.ok ? r.json() : null)
                 .then(res => {
@@ -1235,10 +1218,9 @@
             });
         }
 
-        // State Management
         let allUsers = {{ users_json | safe }};
-        let currentSortColumn = null; // 'username', 'live_status', 'traffic', 'expiration', 'account_status'
-        let currentSortDirection = 'none'; // 'none', 'asc', 'desc'
+        let currentSortColumn = null;
+        let currentSortDirection = 'none';
         let currentPage = 1;
         let perPage = 10;
         let searchQuery = '';
@@ -1255,7 +1237,6 @@
                 .replace(/'/g, "&#039;");
         }
 
-        // Cookie Management
         function getCookie(name) {
             const value = `; ${document.cookie}`;
             const parts = value.split(`; ${name}=`);
@@ -1294,7 +1275,6 @@
             renderUsersTable();
         }
 
-        // Sorting System
         function handleSort(col) {
             if (currentSortColumn !== col) {
                 currentSortColumn = col;
@@ -1346,7 +1326,7 @@
                 const onA = a.is_online ? 1 : 0;
                 const onB = b.is_online ? 1 : 0;
                 if (onA !== onB) {
-                    res = onB - onA; // Online (1) before Offline (0)
+                    res = onB - onA;
                 } else if (onA === 1) {
                     res = (b.device_count || 1) - (a.device_count || 1);
                 } else {
@@ -1357,7 +1337,7 @@
             } else if (col === 'traffic') {
                 const bytesA = Number(a.used_traffic_bytes) || 0;
                 const bytesB = Number(b.used_traffic_bytes) || 0;
-                res = bytesB - bytesA; // Highest consumption first in asc
+                res = bytesB - bytesA;
             } else if (col === 'expiration') {
                 const parseExp = (u) => {
                     if (!u.expire_date) return Infinity;
@@ -1366,11 +1346,11 @@
                 };
                 const expA = parseExp(a);
                 const expB = parseExp(b);
-                res = expA - expB; // Expiring soonest first in asc
+                res = expA - expB;
             } else if (col === 'account_status') {
                 const actA = (a.is_active === 1) ? 1 : 0;
                 const actB = (b.is_active === 1) ? 1 : 0;
-                res = actB - actA; // Active first in asc
+                res = actB - actA;
             }
 
             return dir === 'desc' ? -res : res;
@@ -1463,13 +1443,11 @@
 
             let html = '';
 
-            // Prev Button
             const prevDisabled = currentPage === 1 ? 'disabled' : '';
             html += `<button class="page-btn" ${prevDisabled} onclick="goToPage(${currentPage - 1})" title="Previous Page">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
             </button>`;
 
-            // Page numbers
             const pageNumbers = getPageNumbers(currentPage, totalPages);
             pageNumbers.forEach(p => {
                 if (p === '...') {
@@ -1480,7 +1458,6 @@
                 }
             });
 
-            // Next Button
             const nextDisabled = currentPage === totalPages ? 'disabled' : '';
             html += `<button class="page-btn" ${nextDisabled} onclick="goToPage(${currentPage + 1})" title="Next Page">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
@@ -1610,7 +1587,6 @@
         async function submitAddUser(e) {
             e.preventDefault();
 
-            // Custom client-side validation
             const uInput = document.getElementById('addUsername');
             const pInput = document.getElementById('addPassword');
             const devInput = document.getElementById('addMaxDevices');
@@ -1836,7 +1812,7 @@
         async function toggleUser(userId, checkbox) {
             const newState = checkbox.checked ? 1 : 0;
             const elActive = document.getElementById('statActiveUsers');
-            
+
             const targetUser = allUsers.find(u => String(u.id) === String(userId));
             if (targetUser) {
                 targetUser.is_active = newState;
@@ -1851,7 +1827,7 @@
                 let cur = parseInt(elActive.innerText || '0');
                 elActive.innerText = Math.max(0, newState === 1 ? cur + 1 : cur - 1);
             }
-            
+
             checkbox.disabled = true;
             try {
                 const response = await fetch(`${BASE_PATH}/user/toggle/` + userId, {
@@ -1874,7 +1850,6 @@
                     throw new Error(res.error || 'Failed to toggle status');
                 }
             } catch (err) {
-                // Rollback
                 const rollbackState = (newState === 1 ? 0 : 1);
                 if (targetUser) targetUser.is_active = rollbackState;
                 checkbox.checked = (rollbackState === 1);
@@ -1898,17 +1873,17 @@
                 sseSource.close();
             }
             sseSource = new EventSource(`${BASE_PATH}/api/stream`);
-            
+
             sseSource.onmessage = function(e) {
                 try {
                     const data = JSON.parse(e.data);
-                    
+
                     if (data.stats) {
                         const elTotal = document.getElementById('statTotalUsers');
                         const elActive = document.getElementById('statActiveUsers');
                         const elOnline = document.getElementById('statOnlineCount');
                         const elTraf = document.getElementById('statTotalTraffic');
-                        
+
                         if (elTotal) elTotal.innerText = data.stats.total_users;
                         if (elActive) elActive.innerText = data.stats.active_users;
                         if (elOnline) elOnline.innerHTML = `<span class="badge-pulse"></span> ` + data.stats.online_count;
@@ -1927,7 +1902,7 @@
                         const elCpu = document.getElementById('sysCpuVal');
                         const elCpuBar = document.getElementById('sysCpuBar');
                         const elCpuCores = document.getElementById('sysCpuCores');
-                        
+
                         if (elCpu) elCpu.innerText = s.cpu_percent + '%';
                         if (elCpuBar) {
                             elCpuBar.style.width = s.cpu_percent + '%';
@@ -1966,7 +1941,7 @@
                         if (elNetDown) elNetDown.innerText = '↓ ' + s.net_rx;
                         if (elNetUp) elNetUp.innerText = '↑ ' + s.net_tx;
                     }
-                    
+
                     if (data.users && Array.isArray(data.users)) {
                         allUsers = data.users;
                         renderUsersTable();
@@ -1981,7 +1956,7 @@
                     console.error("SSE parse error:", err);
                 }
             };
-            
+
             sseSource.onerror = function() {
                 setTimeout(initSSE, 3000);
             };

@@ -57,7 +57,7 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.4.6"
+APP_VERSION = "1.5.0"
 
 app = Flask(
     __name__,
@@ -79,7 +79,6 @@ app.config["PERMANENT_SESSION_LIFETIME"] = datetime.timedelta(days=30)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
-# Graceful shutdown flag
 shutdown_event = threading.Event()
 
 def signal_handler(signum, frame):
@@ -142,7 +141,7 @@ def format_speed(bps):
 def get_system_metrics():
     global prev_cpu_times, prev_net_bytes, prev_net_time
     now = time.time()
-    
+
     try:
         total, used, free = shutil.disk_usage('/')
         disk_pct = round((used / total) * 100, 1)
@@ -262,7 +261,7 @@ def init_db():
             value TEXT
         )
         """)
-        
+
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS admin (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -271,7 +270,7 @@ def init_db():
             created_at TEXT
         )
         """)
-        
+
         try:
             cursor.execute("ALTER TABLE admin ADD COLUMN created_at TEXT")
         except Exception:
@@ -292,7 +291,7 @@ def init_db():
             max_devices INTEGER DEFAULT 10
         )
         """)
-        
+
         try:
             cursor.execute("ALTER TABLE users ADD COLUMN last_online_at TEXT")
         except Exception:
@@ -309,7 +308,7 @@ def init_db():
             pass
 
         cursor.execute("UPDATE users SET max_devices = 10 WHERE max_devices IS NULL OR max_devices <= 0 OR max_devices > 10")
-        
+
         cursor.execute("SELECT COUNT(*) as cnt FROM admin")
         if cursor.fetchone()["cnt"] == 0:
             rand_admin_user = ''.join(secrets.choice(string.ascii_lowercase) for _ in range(8))
@@ -317,7 +316,7 @@ def init_db():
             default_hash = generate_password_hash(rand_admin_pass)
             now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             cursor.execute("INSERT INTO admin (username, password_hash, created_at) VALUES (?, ?, ?)", (rand_admin_user, default_hash, now))
-            
+
         cursor.execute("SELECT COUNT(*) as cnt FROM users")
         if cursor.fetchone()["cnt"] == 0:
             now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -326,7 +325,7 @@ def init_db():
                 INSERT INTO users (username, password, max_traffic_gb, used_traffic_bytes, created_at, expire_date, is_active, note, last_online_at, max_devices)
                 VALUES ('user1', ?, 0, 0, ?, NULL, 1, 'Default VPN User', NULL, 10)
             """, (default_user_pass, now))
-            
+
         conn.commit()
         conn.close()
     except Exception as e:
@@ -407,10 +406,10 @@ def sync_ipsec_secrets():
             cursor.execute("SELECT username, password, max_traffic_gb, used_traffic_bytes, expire_date, is_active FROM users")
             users = cursor.fetchall()
             conn.close()
-            
+
             now = datetime.datetime.now()
             active_lines = [": RSA privkey.pem"]
-            
+
             for u in users:
                 is_active = u["is_active"] if u["is_active"] is not None else 1
                 if u["expire_date"]:
@@ -424,19 +423,19 @@ def sync_ipsec_secrets():
                     max_bytes = u["max_traffic_gb"] * 1024 * 1024 * 1024
                     if (u["used_traffic_bytes"] or 0) >= max_bytes:
                         is_active = 0
-                        
+
                 if is_active == 1:
                     pwd = str(u["password"]).replace('\\', '\\\\').replace('"', '\\"')
                     uname = str(u["username"]).replace('\\', '\\\\').replace('"', '\\"')
                     active_lines.append(f'{uname} : EAP "{pwd}"')
-                    
+
             os.makedirs(os.path.dirname(os.path.abspath(SECRETS_PATH)), exist_ok=True)
             temp_secrets = f"{SECRETS_PATH}.tmp"
             with open(temp_secrets, "w") as f:
                 f.write("\n".join(active_lines) + "\n")
             os.chmod(temp_secrets, 0o600)
             os.replace(temp_secrets, SECRETS_PATH)
-            
+
             subprocess.run(["ipsec", "rereadsecrets"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception as e:
             print(f"[!] Error syncing ipsec.secrets: {e}", file=sys.stderr)
@@ -484,19 +483,19 @@ def fetch_online_users_raw():
         db_users = get_db_usernames()
         if not db_users:
             return online
-            
+
         db_users_set = set(db_users)
         db_users_lower = {u.lower(): u for u in db_users}
-        
+
         res = subprocess.run(["ipsec", "statusall"], capture_output=True, text=True, check=False)
         output = res.stdout or ""
-        
+
         lines = output.splitlines()
         sa_blocks = {}
         current_sa_id = None
-        
+
         for line in lines:
-            # Match IKE SA line: e.g. `ikev2-vpn[1]: ESTABLISHED` or `[1]: ESTABLISHED`
+
             ike_match = re.search(r'(?:^|\s)[\w.-]*\[(\d+)\]:\s*(.*)$', line)
             if ike_match:
                 sa_id = ike_match.group(1)
@@ -505,42 +504,35 @@ def fetch_online_users_raw():
                     sa_blocks[current_sa_id] = []
                 sa_blocks[current_sa_id].append(line)
                 continue
-                
-            # Match Child SA line: e.g. `ikev2-vpn{1}: INSTALLED`
+
             child_match = re.search(r'(?:^|\s)[\w.-]*\{(\d+)\}:\s*(.*)$', line)
             if child_match:
                 if current_sa_id is not None:
                     sa_blocks[current_sa_id].append(line)
                 continue
-                
-            # Continuation line under current SA block
+
             if current_sa_id is not None and (line.startswith(' ') or line.startswith('\t')):
                 sa_blocks[current_sa_id].append(line)
             else:
                 if line.strip() and not line.startswith(' '):
                     current_sa_id = None
 
-        # Parse each SA block
         for sa_id, block_lines in sa_blocks.items():
             block_text = "\n".join(block_lines)
-            
-            # Check if SA is ESTABLISHED
+
             if not re.search(r'ESTABLISHED', block_text, re.IGNORECASE):
                 continue
-                
+
             candidates = []
-            
-            # 1. EAP identity patterns (Remote EAP identity, EAP identity, EAP identity '%any' -> ...)
+
             eap_matches = re.findall(r'(?:Remote\s+)?EAP\s+identity(?:\s*\'%any\'\s*->)?\s*[:\s]\s*[\'\"]?([^\'\s\n\r,\]]+)', block_text, re.IGNORECASE)
             for m in eap_matches:
                 candidates.append(m.strip("'\" \t"))
-                
-            # 2. Remote identity patterns
+
             rem_matches = re.findall(r'Remote\s+identity\s*[:\s]\s*[\'\"]?([^\'\s\n\r,\]]+)', block_text, re.IGNORECASE)
             for m in rem_matches:
                 candidates.append(m.strip("'\" \t"))
-                
-            # 3. ESTABLISHED line remote ID and IP
+
             client_ip = None
             established_str = ""
             for bline in block_lines:
@@ -560,8 +552,7 @@ def fetch_online_users_raw():
                         raw_ip = ip_m.group(1).strip()
                         if not raw_ip.startswith('%') and raw_ip != '0.0.0.0':
                             client_ip = raw_ip
-                        
-            # Match candidate against database users
+
             matched_user = None
             for cand in candidates:
                 cand_clean = cand
@@ -571,7 +562,7 @@ def fetch_online_users_raw():
                     cand_clean = cand_clean.split('/')[-1]
                 if '@' in cand_clean and cand_clean not in db_users_set:
                     cand_clean = cand_clean.split('@')[0]
-                    
+
                 if cand in db_users_set:
                     matched_user = cand
                     break
@@ -584,11 +575,10 @@ def fetch_online_users_raw():
                 elif cand_clean.lower() in db_users_lower:
                     matched_user = db_users_lower[cand_clean.lower()]
                     break
-                    
+
             if not matched_user:
                 continue
-                
-            # Extract traffic bytes for this SA
+
             bytes_in = 0
             bytes_out = 0
             for bline in block_lines:
@@ -596,8 +586,7 @@ def fetch_online_users_raw():
                 if bm:
                     bytes_in += int(bm.group(1))
                     bytes_out += int(bm.group(2))
-                    
-            # Extract VIP
+
             vip = None
             for bline in block_lines:
                 vip_m = re.search(r'===\s*(10\.\d+\.\d+\.\d+|(?:\d{1,3}\.){3}\d{1,3})', bline)
@@ -608,8 +597,7 @@ def fetch_online_users_raw():
                 if vip_fallback:
                     vip = vip_fallback.group(1)
                     break
-                    
-            # Group per user
+
             if matched_user not in online:
                 online[matched_user] = {
                     "username": matched_user,
@@ -654,13 +642,12 @@ def fetch_online_users_raw():
                 }
                 online[matched_user]["device_count"] = len(online[matched_user]["sa_ids"])
 
-        # Update per-user live speeds
         for uname, udata in online.items():
             update_user_live_speed(uname, udata.get("bytes_in", 0), udata.get("bytes_out", 0))
-                
+
     except Exception as e:
         print(f"[!] Error parsing ipsec statusall: {e}", file=sys.stderr)
-        
+
     return online
 
 def get_online_users(ttl=1.5):
@@ -669,7 +656,7 @@ def get_online_users(ttl=1.5):
     with online_cache_lock:
         if (now - cached_online_time) < ttl and cached_online_users:
             return cached_online_users
-            
+
     fresh_online = fetch_online_users_raw()
     with online_cache_lock:
         cached_online_users = fresh_online
@@ -690,64 +677,64 @@ def accounting_daemon():
 
             now = datetime.datetime.now()
             now_str = now.strftime("%Y-%m-%d %H:%M:%S")
-            
+
             conn = get_db()
             cursor = conn.cursor()
-            
+
             active_sa_ids = set()
             user_deltas = {}
-            
+
             for username, data in online.items():
                 for sa_id, sa_data in data.get("sas", {}).items():
                     active_sa_ids.add(sa_id)
                     curr_bytes = sa_data["bytes_total"]
                     prev_bytes = last_seen_sa_bytes.get(sa_id, 0)
-                    
+
                     delta = 0
                     if curr_bytes >= prev_bytes:
                         delta = curr_bytes - prev_bytes
                     else:
                         delta = curr_bytes
-                        
+
                     last_seen_sa_bytes[sa_id] = curr_bytes
                     if delta > 0:
                         user_deltas[username] = user_deltas.get(username, 0) + delta
-                        
+
                 client_ip = data.get("client_ip") or ""
                 if client_ip:
                     cursor.execute("""
-                        UPDATE users 
-                        SET last_online_at = ?, last_ip = ? 
+                        UPDATE users
+                        SET last_online_at = ?, last_ip = ?
                         WHERE username = ?
                     """, (now_str, client_ip, username))
                 else:
                     cursor.execute("""
-                        UPDATE users 
-                        SET last_online_at = ? 
+                        UPDATE users
+                        SET last_online_at = ?
                         WHERE username = ?
                     """, (now_str, username))
-                
+
             for username, delta in user_deltas.items():
                 cursor.execute("""
-                    UPDATE users 
+                    UPDATE users
                     SET used_traffic_bytes = COALESCE(used_traffic_bytes, 0) + ?
                     WHERE username = ?
                 """, (delta, username))
-                
+
             for sa_id in list(last_seen_sa_bytes.keys()):
                 if sa_id not in active_sa_ids:
                     del last_seen_sa_bytes[sa_id]
-                    
+
             conn.commit()
-            
+
             cursor.execute("SELECT id, username, max_traffic_gb, used_traffic_bytes, expire_date, is_active, max_devices FROM users")
             users = cursor.fetchall()
-            
+
             should_resync = False
             for u in users:
                 is_active = u["is_active"] if u["is_active"] is not None else 1
                 needs_disable = False
-                
+
                 if u["expire_date"]:
                     try:
                         exp_dt = datetime.datetime.strptime(u["expire_date"], "%Y-%m-%d %H:%M:%S")
@@ -755,34 +742,34 @@ def accounting_daemon():
                             needs_disable = True
                     except Exception:
                         pass
-                
+
                 if u["max_traffic_gb"] and u["max_traffic_gb"] > 0:
                     max_bytes = u["max_traffic_gb"] * 1024 * 1024 * 1024
                     if (u["used_traffic_bytes"] or 0) >= max_bytes:
                         needs_disable = True
-                        
+
                 if needs_disable and is_active == 1:
                     cursor.execute("UPDATE users SET is_active = 0 WHERE id = ?", (u["id"],))
                     should_resync = True
                     disconnect_user_sas(u["username"], online)
                 elif is_active == 1 and u["username"] in online:
-                    # Enforce per-user simultaneous device limit (1-10)
+
                     user_max_dev = u["max_devices"] if u["max_devices"] is not None and u["max_devices"] > 0 else 10
                     try:
                         user_max_dev = max(1, min(10, int(user_max_dev)))
                     except (ValueError, TypeError):
                         user_max_dev = 10
                     disconnect_excess_sas(u["username"], user_max_dev, online)
-                            
+
             conn.commit()
             conn.close()
-            
+
             if should_resync:
                 sync_ipsec_secrets()
-                
+
         except Exception as e:
             print(f"[!] Daemon exception: {e}", file=sys.stderr)
-            
+
         if shutdown_event.wait(2):
             break
 
@@ -795,9 +782,9 @@ def start_accounting_daemon():
         daemon_lock_handle = open(lock_file, "w")
         fcntl.flock(daemon_lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except (IOError, BlockingIOError, PermissionError):
-        # Another process holds the lock; do not start duplicate daemon
+
         return
-    
+
     t = threading.Thread(target=accounting_daemon, daemon=True)
     t.start()
 
@@ -909,14 +896,14 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
-        
+
         try:
             conn = get_db()
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM admin WHERE username = ?", (username,))
             admin = cursor.fetchone()
             conn.close()
-            
+
             if admin and check_password_hash(admin["password_hash"], password):
                 session.permanent = True
                 session["logged_in"] = True
@@ -927,7 +914,7 @@ def login():
                 flash("Invalid username or password!", "danger")
         except Exception as e:
             flash(f"Login error: {e}", "danger")
-            
+
     return render_template("login.html")
 
 @app.route("/logout")
@@ -957,8 +944,7 @@ def format_user_payload(u, online):
         max_dev = max(1, min(10, max_dev))
     except (ValueError, TypeError):
         max_dev = 10
-    
-    # Last IP extraction
+
     saved_last_ip = u.get("last_ip") if isinstance(u, dict) else (u["last_ip"] if "last_ip" in u.keys() else "")
     last_ip_val = saved_last_ip or ""
     if is_on:
@@ -966,14 +952,13 @@ def format_user_payload(u, online):
         if live_client_ip:
             last_ip_val = live_client_ip
 
-    # Live Network stats (only populated when user is online)
     live_net = None
     if is_on:
         with user_speed_lock:
             spd = user_live_speeds.get(uname, {})
             rx_spd = spd.get('net_rx', '0 B/s')
             tx_spd = spd.get('net_tx', '0 B/s')
-        
+
         bytes_in = online_info.get("bytes_in", 0)
         bytes_out = online_info.get("bytes_out", 0)
         live_net = {
@@ -1021,7 +1006,7 @@ def get_user_info_api(user_id):
         conn.close()
         if not row:
             return jsonify({"success": False, "error": "User not found"}), 404
-        
+
         online = get_online_users()
         user_data = format_user_payload(dict(row), online)
         return jsonify({"success": True, "user": user_data})
@@ -1040,18 +1025,18 @@ def dashboard():
     except Exception as e:
         users = []
         print(f"[!] Error fetching users: {e}", file=sys.stderr)
-    
+
     online = get_online_users()
-    
+
     total_users = len(users)
     active_users = sum(1 for u in users if (u["is_active"] or 0) == 1)
     online_count = sum(1 for u in users if u["username"] in online)
     total_traffic_bytes = sum((u["used_traffic_bytes"] or 0) for u in users)
     sys_metrics = get_system_metrics()
     users_formatted = [format_user_payload(u, online) for u in users]
-    
-    return render_template("dashboard.html", 
-                           users=users, 
+
+    return render_template("dashboard.html",
+                           users=users,
                            users_json=json.dumps(users_formatted),
                            online=online,
                            total_users=total_users,
@@ -1099,7 +1084,7 @@ def sse_stream():
                 break
             except Exception as e:
                 print(f"[!] Error in SSE generator: {e}", file=sys.stderr)
-                
+
             if shutdown_event.wait(2):
                 break
 
@@ -1114,10 +1099,10 @@ def sse_stream():
 def add_user():
     username = request.form.get("username", "").strip()
     password = request.form.get("password", "").strip()
-    
+
     raw_traffic = request.form.get("max_traffic_gb", "").strip()
     max_traffic_gb = float(raw_traffic) if raw_traffic else 0.0
-    
+
     raw_days = request.form.get("duration_days", "").strip()
     duration_days = int(raw_days) if raw_days else 0
 
@@ -1127,18 +1112,17 @@ def add_user():
         max_devices = max(1, min(10, max_devices))
     except ValueError:
         max_devices = 10
-    
+
     note = request.form.get("note", "").strip()
-    
+
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.accept_mimetypes.best == "application/json"
-    
+
     if not username or not password:
         if is_ajax:
             return jsonify({"success": False, "error": "Username and password are required!"}), 400
         flash("Username and password are required!", "danger")
         return redirect(url_for("dashboard"))
 
-    # Case-insensitive uniqueness check
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -1152,13 +1136,13 @@ def add_user():
             return redirect(url_for("dashboard"))
     except Exception as e:
         pass
-        
+
     expire_date = None
     if duration_days > 0:
         expire_date = (datetime.datetime.now() + datetime.timedelta(days=duration_days)).strftime("%Y-%m-%d %H:%M:%S")
-        
+
     created_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
+
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -1169,12 +1153,12 @@ def add_user():
         conn.commit()
         user_id = cursor.lastrowid
         conn.close()
-        
+
         sync_ipsec_secrets()
-        
+
         traffic_display = f"{max_traffic_gb} GB" if max_traffic_gb > 0 else "Unlimited"
         expire_display = f"{duration_days} Days" if duration_days > 0 else "Lifetime (Unlimited)"
-        
+
         if is_ajax:
             return jsonify({
                 "success": True,
@@ -1190,7 +1174,7 @@ def add_user():
                 "max_devices": max_devices,
                 "note": note
             })
-            
+
         flash(f"User '{username}' added successfully!", "success")
     except sqlite3.IntegrityError:
         if is_ajax:
@@ -1200,7 +1184,7 @@ def add_user():
         if is_ajax:
             return jsonify({"success": False, "error": f"Error adding user: {e}"}), 500
         flash(f"Error adding user: {e}", "danger")
-        
+
     return redirect(url_for("dashboard"))
 
 @app.route("/user/edit/<int:user_id>", methods=["POST"])
@@ -1210,26 +1194,26 @@ def edit_user(user_id):
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
-    
+
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.accept_mimetypes.best == "application/json"
-    
+
     if not user:
         conn.close()
         if is_ajax:
             return jsonify({"success": False, "error": "User not found!"}), 404
         flash("User not found!", "danger")
         return redirect(url_for("dashboard"))
-        
+
     change_pwd = request.form.get("change_password") == "yes"
     raw_pwd = request.form.get("password", "").strip()
-    
+
     if change_pwd and raw_pwd:
         new_password = raw_pwd
         pwd_was_changed = True
     else:
         new_password = user["password"]
         pwd_was_changed = False
-        
+
     raw_traffic = request.form.get("max_traffic_gb", "").strip()
     if raw_traffic == "":
         max_traffic_gb = 0.0
@@ -1242,7 +1226,7 @@ def edit_user(user_id):
         except ValueError:
             max_traffic_gb = user["max_traffic_gb"]
             traffic_display = f"{user['max_traffic_gb']} GB" if user['max_traffic_gb'] > 0 else "Unlimited"
-            
+
     raw_days = request.form.get("duration_days", "").strip()
     if raw_days == "":
         new_expire = None
@@ -1282,26 +1266,26 @@ def edit_user(user_id):
         except ValueError:
             existing_dev = user["max_devices"] if ("max_devices" in user.keys() and user["max_devices"] is not None) else 10
             max_devices = max(1, min(10, int(existing_dev or 10)))
-            
+
     note = request.form.get("note", "").strip()
-    
+
     query = """
-        UPDATE users 
+        UPDATE users
         SET password = ?, max_traffic_gb = ?, expire_date = ?, note = ?, max_devices = ?
         WHERE id = ?
     """
     params = [new_password, max_traffic_gb, new_expire, note, max_devices, user_id]
-    
+
     cursor.execute(query, params)
     conn.commit()
     conn.close()
-    
+
     sync_ipsec_secrets()
     if pwd_was_changed:
         disconnect_user_sas(user["username"])
     else:
         disconnect_excess_sas(user["username"], max_devices)
-    
+
     if is_ajax:
         return jsonify({
             "success": True,
@@ -1319,7 +1303,7 @@ def edit_user(user_id):
             "max_devices": max_devices,
             "note": note
         })
-        
+
     flash(f"User '{user['username']}' updated successfully!", "success")
     return redirect(url_for("dashboard"))
 
@@ -1337,10 +1321,10 @@ def toggle_user(user_id):
         conn.commit()
         conn.close()
         sync_ipsec_secrets()
-        
+
         if new_state == 0:
             disconnect_user_sas(user["username"])
-                    
+
         status_str = "Enabled" if new_state == 1 else "Disabled"
         if is_ajax:
             return jsonify({
@@ -1372,7 +1356,7 @@ def delete_user(user_id):
         conn.close()
         sync_ipsec_secrets()
         disconnect_user_sas(username)
-                
+
         flash(f"User '{username}' deleted successfully!", "warning")
     else:
         conn.close()
@@ -1382,7 +1366,7 @@ def update_nginx_panel_path(new_path):
     try:
         domain = get_system_config("server_domain", SERVER_DOMAIN)
         port = get_system_config("panel_port", "443")
-        
+
         conf_path = "/etc/nginx/sites-available/ike-ui"
         if os.path.exists(conf_path):
             try:
@@ -1492,14 +1476,12 @@ server {{
     except Exception as e:
         return False, str(e)
 
-# ================= Admin Management Routes =================
-
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
     if request.method == "POST":
         return update_credentials()
-        
+
     vpn_status = (get_system_config("vpn_enabled", "1") == "1")
     cur_path = get_system_config("panel_path", "")
     return render_template("settings.html", vpn_enabled=vpn_status, panel_path=cur_path)
@@ -1536,8 +1518,7 @@ def update_credentials():
 
     updates = []
     params = []
-    
-    # Check username change
+
     if new_user and new_user != curr_user:
         new_user = re.sub(r'[^a-zA-Z0-9_@.-]', '', new_user)
         if len(new_user) < 3:
@@ -1547,7 +1528,7 @@ def update_credentials():
                 return jsonify({"success": False, "error": msg}), 400
             flash(msg, "danger")
             return redirect(url_for("settings"))
-            
+
         cursor.execute("SELECT id FROM admin WHERE username = ? AND id != ?", (new_user, admin["id"]))
         if cursor.fetchone():
             conn.close()
@@ -1556,11 +1537,10 @@ def update_credentials():
                 return jsonify({"success": False, "error": msg}), 400
             flash(msg, "danger")
             return redirect(url_for("settings"))
-            
+
         updates.append("username = ?")
         params.append(new_user)
 
-    # Check password change
     if new_pass:
         if new_pass != confirm_pass:
             conn.close()
@@ -1594,7 +1574,6 @@ def update_credentials():
     conn.commit()
     conn.close()
 
-    # Invalidate session to require re-login
     session.clear()
 
     msg = "Credentials updated successfully. Please log in with your new credentials."
@@ -1624,7 +1603,7 @@ def update_path():
     clean_path = result
     domain = get_system_config("server_domain", SERVER_DOMAIN)
     port = get_system_config("panel_port", "443")
-    
+
     conf_path = "/etc/nginx/sites-available/ike-ui"
     if os.path.exists(conf_path):
         try:
@@ -1664,7 +1643,7 @@ def toggle_vpn_service():
     sync_ipsec_secrets()
     if not new_status:
         disconnect_all_sas()
-        
+
     status_text = "enabled" if new_status else "disabled (Maintenance Mode)"
     msg = f"VPN Service is now {status_text}."
     if is_ajax:
@@ -1682,20 +1661,20 @@ def add_admin():
     username = request.form.get("username", "").strip()
     password = request.form.get("password", "").strip()
     confirm = request.form.get("confirm_password", "").strip()
-    
+
     if not username or not password:
         flash("Username and password are required!", "danger")
         return redirect(url_for("settings"))
-        
+
     if password != confirm:
         flash("Passwords do not match!", "danger")
         return redirect(url_for("settings"))
-        
+
     try:
         conn = get_db()
         cursor = conn.cursor()
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute("INSERT INTO admin (username, password_hash, created_at) VALUES (?, ?, ?)", 
+        cursor.execute("INSERT INTO admin (username, password_hash, created_at) VALUES (?, ?, ?)",
                        (username, generate_password_hash(password), now))
         conn.commit()
         conn.close()
@@ -1704,7 +1683,7 @@ def add_admin():
         flash(f"Administrator with username '{username}' already exists!", "danger")
     except Exception as e:
         flash(f"Error creating admin: {e}", "danger")
-        
+
     return redirect(url_for("settings"))
 
 @app.route("/admin/edit-password/<int:admin_id>", methods=["POST"])
@@ -1712,25 +1691,25 @@ def add_admin():
 def edit_admin_password(admin_id):
     new_password = request.form.get("new_password", "").strip()
     confirm = request.form.get("confirm_password", "").strip()
-    
+
     if not new_password or new_password != confirm:
         flash("Passwords are empty or do not match!", "danger")
         return redirect(url_for("settings"))
-        
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM admin WHERE id = ?", (admin_id,))
     target_admin = cursor.fetchone()
-    
+
     if not target_admin:
         conn.close()
         flash("Administrator not found!", "danger")
         return redirect(url_for("settings"))
-        
+
     cursor.execute("UPDATE admin SET password_hash = ? WHERE id = ?", (generate_password_hash(new_password), admin_id))
     conn.commit()
     conn.close()
-    
+
     flash(f"Password updated for administrator '{target_admin['username']}'!", "success")
     return redirect(url_for("settings"))
 
@@ -1741,35 +1720,33 @@ def delete_admin(admin_id):
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) as cnt FROM admin")
     total_admins = cursor.fetchone()["cnt"]
-    
+
     if total_admins <= 1:
         conn.close()
         flash("Cannot delete the only remaining administrator!", "danger")
         return redirect(url_for("settings"))
-        
+
     cursor.execute("SELECT * FROM admin WHERE id = ?", (admin_id,))
     target_admin = cursor.fetchone()
-    
+
     if not target_admin:
         conn.close()
         flash("Administrator not found!", "danger")
         return redirect(url_for("settings"))
-        
+
     is_self = (target_admin["username"] == session.get("admin_user"))
-    
+
     cursor.execute("DELETE FROM admin WHERE id = ?", (admin_id,))
     conn.commit()
     conn.close()
-    
+
     if is_self:
         session.clear()
         flash("Your administrator account has been deleted.", "info")
         return redirect(url_for("login"))
-        
+
     flash(f"Administrator '{target_admin['username']}' deleted successfully.", "warning")
     return redirect(url_for("settings"))
-
-# ================= Database Backup & Restore =================
 
 def validate_uploaded_sqlite_db(file_bytes):
     """
@@ -1779,8 +1756,7 @@ def validate_uploaded_sqlite_db(file_bytes):
     """
     if not file_bytes:
         return False, "No file content received.", []
-    
-    # Check SQLite magic header (first 16 bytes: 'SQLite format 3\x00')
+
     if len(file_bytes) < 16 or not file_bytes.startswith(b"SQLite format 3\x00"):
         return False, "Invalid file signature. The uploaded file is not a valid SQLite 3 database.", []
 
@@ -1794,20 +1770,17 @@ def validate_uploaded_sqlite_db(file_bytes):
         test_conn.row_factory = sqlite3.Row
         test_cur = test_conn.cursor()
 
-        # 1. Integrity check
         test_cur.execute("PRAGMA integrity_check;")
         check_row = test_cur.fetchone()
         if not check_row or str(check_row[0]).lower() != "ok":
             test_conn.close()
             return False, "The database file appears corrupted (integrity check failed).", []
 
-        # 2. Check for users table
         test_cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users';")
         if not test_cur.fetchone():
             test_conn.close()
             return False, "Incompatible database: Table 'users' was not found in the uploaded file.", []
 
-        # 3. Check columns in users table
         test_cur.execute("PRAGMA table_info(users);")
         col_rows = test_cur.fetchall()
         cols = {row["name"].lower() for row in col_rows}
@@ -1816,7 +1789,6 @@ def validate_uploaded_sqlite_db(file_bytes):
             test_conn.close()
             return False, "Incompatible table schema: Missing required 'username' or 'password' columns.", []
 
-        # 4. Fetch all user records
         test_cur.execute("SELECT * FROM users;")
         rows = test_cur.fetchall()
         test_conn.close()
@@ -1833,7 +1805,7 @@ def validate_uploaded_sqlite_db(file_bytes):
             uname = str(r_dict.get("username", "")).strip()
             if not uname:
                 continue
-            
+
             uname_lower = uname.lower()
             if uname_lower in seen_usernames:
                 continue
@@ -2039,7 +2011,6 @@ def restore_users_validate():
     if not file or file.filename == "":
         return jsonify({"success": False, "error": "Please select a valid database file."}), 400
 
-    # Max upload limit check (50 MB)
     file_bytes = file.read()
     if len(file_bytes) > 50 * 1024 * 1024:
         return jsonify({"success": False, "error": "Database file is too large (maximum allowed is 50MB)."}), 400
@@ -2083,7 +2054,6 @@ def restore_users_execute():
         conn = get_db()
         cursor = conn.cursor()
 
-        # Atomic replacement of users table
         cursor.execute("DELETE FROM users;")
         for u in users:
             cursor.execute("""
@@ -2106,7 +2076,6 @@ def restore_users_execute():
         conn.commit()
         conn.close()
 
-        # Resynchronize StrongSwan credentials & disconnect old SAs
         sync_ipsec_secrets()
         disconnect_all_sas()
 
@@ -2119,7 +2088,6 @@ def restore_users_execute():
         print(f"[!] Error during users restore: {e}", file=sys.stderr)
         return jsonify({"success": False, "error": f"Database restore failed: {e}"}), 500
 
-# Initialize DB and run daemon
 init_db()
 sync_ipsec_secrets()
 start_accounting_daemon()

@@ -6,7 +6,7 @@
     --bg-card: #1b1e2e;
     --bg-card-hover: #22263a;
     --bg-input: #0f111a;
-    
+
     --border-dark: #000000;
     --border-subtle: #2d324d;
     --border-width: 2px;
@@ -17,13 +17,13 @@
     --shadow-md: 4px 4px 0px #000000;
     --shadow-lg: 6px 6px 0px #000000;
     --shadow-xl: 8px 8px 0px #000000;
-    
+
     --primary: #7452ff;
     --primary-hover: #886cff;
     --primary-active: #5f3ee8;
     --accent-cyan: #00f0ff;
     --accent-yellow: #ffd000;
-    
+
     --success: #00f59b;
     --success-bg: rgba(0, 245, 155, 0.12);
     --warning: #ffb703;
@@ -443,7 +443,6 @@ body.modal-open {
     background-color: #ffffff;
 }
 
-/* Table Row Action Toggle Switch */
 .switch-toggle {
     position: relative;
     display: inline-flex;
@@ -519,7 +518,6 @@ body.modal-open {
     pointer-events: none;
 }
 
-/* Large Control Card Toggle Switch */
 .switch-toggle-lg {
     position: relative;
     display: inline-flex;
@@ -855,7 +853,6 @@ body.modal-open {
     overflow: hidden;
 }
 
-/* Settings Page Components */
 .settings-main {
     max-width: 680px;
     margin: 2rem auto;
@@ -1305,7 +1302,6 @@ body.modal-open {
     font-size: 0.9rem;
 }
 
-/* Table Pagination Footer */
 .table-pagination {
     background: #10121d;
     border-top: var(--border-width) solid var(--border-dark);
@@ -1571,7 +1567,6 @@ input[type="number"]:focus {
     transform: translate(-1px, -1px);
 }
 
-/* Placeholder Styling */
 input::placeholder,
 textarea::placeholder {
     color: #555d7e !important;
@@ -1876,7 +1871,6 @@ input.input-error:focus {
     margin-bottom: 0.75rem;
 }
 
-/* Toast Notifications */
 .toast-container {
     position: fixed;
     top: 1.25rem;
@@ -1985,7 +1979,6 @@ input.input-error:focus {
     color: var(--accent-cyan);
 }
 
-/* Custom Confirmation Modal */
 .confirm-icon-box {
     width: 48px;
     height: 48px;
@@ -2120,7 +2113,6 @@ input.input-error:focus {
     }
 }
 
-/* Restore Modal & Dropzone Styles */
 .restore-dropzone {
     border: 2px dashed var(--border-subtle);
     border-radius: var(--radius-md);
@@ -2241,7 +2233,6 @@ input.input-error:focus {
     to { transform: rotate(360deg); }
 }
 
-/* User Info Button & Modal Styles */
 .btn-icon.btn-info-user:hover {
     color: var(--accent-cyan);
     background: rgba(0, 240, 255, 0.12);
@@ -2275,7 +2266,6 @@ input.input-error:focus {
     padding: 1.15rem 1.35rem;
 }
 
-/* User Live Network Card (Standardized like Account Details) */
 .user-live-net-card {
     background: var(--bg-surface);
     border: var(--border-width) solid var(--border-dark);
@@ -2384,7 +2374,6 @@ input.input-error:focus {
     color: var(--text-primary);
 }
 
-/* Account Overview Card */
 .account-overview-card {
     background: var(--bg-surface);
     border: var(--border-width) solid var(--border-dark);
@@ -2456,7 +2445,6 @@ input.input-error:focus {
     }
 }
 
-/* Settings Page Responsive Enhancements */
 @media (max-width: 768px) {
     .settings-main {
         margin: 1.25rem auto;
@@ -2471,18 +2459,18 @@ input.input-error:focus {
         gap: 1rem;
         padding: 1.05rem 1rem;
     }
-    
+
     .settings-row-info {
         min-width: 100%;
     }
-    
+
     .settings-row-actions {
         width: 100%;
         display: flex;
         flex-direction: row;
         gap: 0.5rem;
     }
-    
+
     .settings-row-actions .btn {
         flex: 1;
         justify-content: center;
@@ -2490,28 +2478,28 @@ input.input-error:focus {
         padding: 0.6rem 0.75rem;
         font-size: 0.8rem;
     }
-    
+
     .settings-row-action {
         width: 100%;
     }
-    
+
     .settings-row-action .btn {
         width: 100%;
         justify-content: center;
         text-align: center;
     }
-    
+
     .settings-status-box {
         flex-direction: column;
         align-items: flex-start;
         gap: 0.85rem;
         padding: 0.95rem;
     }
-    
+
     .settings-status-info {
         width: 100%;
     }
-    
+
     .settings-header-flex {
         align-items: flex-start;
     }
@@ -2549,6 +2537,3 @@ input.input-error:focus {
         width: 100%;
     }
 }
-
-
-

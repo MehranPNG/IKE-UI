@@ -56,7 +56,6 @@
                 {% endif %}
             {% endwith %}
 
-            <!-- VPN Service Kill Switch Card -->
             <div class="card settings-card">
                 <div class="card-header settings-header-flex">
                     <div class="settings-header-title">
@@ -88,14 +87,13 @@
                 </div>
             </div>
 
-            <!-- Admin Security & Panel Access Card -->
             <div class="card settings-card">
                 <div class="card-header">
                     <h2>Admin Security & Panel Access</h2>
                     <p>Manage administrator credentials and web panel access path</p>
                 </div>
                 <div class="card-body settings-card-body-stack">
-                    <!-- Admin Credentials Row -->
+
                     <div class="settings-row">
                         <div class="settings-row-info">
                             <div class="settings-row-label">
@@ -121,7 +119,6 @@
                         </div>
                     </div>
 
-                    <!-- Panel Secret Path Row -->
                     <div class="settings-row">
                         <div class="settings-row-info">
                             <div class="settings-row-label">
@@ -150,14 +147,13 @@
                 </div>
             </div>
 
-            <!-- Database Backup & Restore Card -->
             <div class="card settings-card">
                 <div class="card-header">
                     <h2>Database Backup & Restore</h2>
                     <p>Export panel data or restore user accounts from a database file</p>
                 </div>
                 <div class="card-body settings-card-body-stack">
-                    <!-- User Accounts Backup & Restore Row -->
+
                     <div class="settings-row">
                         <div class="settings-row-info">
                             <div class="settings-row-label">
@@ -195,7 +191,6 @@
                         </div>
                     </div>
 
-                    <!-- Full Database Snapshot Row -->
                     <div class="settings-row">
                         <div class="settings-row-info">
                             <div class="settings-row-label">
@@ -228,7 +223,6 @@
         </main>
     </div>
 
-    <!-- Confirm Disable VPN Modal -->
     <div id="confirmVpnModal" class="modal">
         <div class="modal-content" style="max-width: 420px;">
             <div class="modal-body confirm-text-center" style="padding-top: 2rem; padding-bottom: 1.5rem;">
@@ -249,7 +243,6 @@
         </div>
     </div>
 
-    <!-- Change Admin Credentials Modal -->
     <div id="credentialsModal" class="modal">
         <div class="modal-content" style="max-width: 440px;">
             <div class="modal-header">
@@ -286,7 +279,6 @@
         </div>
     </div>
 
-    <!-- Change Panel Path Modal -->
     <div id="pathModal" class="modal">
         <div class="modal-content" style="max-width: 440px;">
             <div class="modal-header">
@@ -311,7 +303,6 @@
         </div>
     </div>
 
-    <!-- Restore Database Modal with 2-Step Verification -->
     <div id="restoreModal" class="modal">
         <div class="modal-content" style="max-width: 490px;">
             <div class="modal-header">
@@ -326,8 +317,7 @@
                 <button class="btn-close" onclick="closeRestoreModal()">&times;</button>
             </div>
             <div class="modal-body" style="padding-top: 1.25rem;">
-                
-                <!-- File Upload Dropzone -->
+
                 <div class="restore-dropzone" id="restoreDropzone" onclick="document.getElementById('restoreFileInput').click()">
                     <input type="file" id="restoreFileInput" accept=".db,.sqlite,.sqlite3" style="display: none;" onchange="handleRestoreFileSelected(this.files)">
                     <div class="restore-dropzone-icon">
@@ -341,10 +331,8 @@
                     <div class="restore-dropzone-sub" id="restoreDropzoneSub">Supports SQLite database backup files</div>
                 </div>
 
-                <!-- Validation Feedback Box -->
                 <div id="restoreValidationStatus" style="display: none; margin-top: 1rem;"></div>
 
-                <!-- Warning Banner -->
                 <div id="restoreWarningBox" style="display: none; margin-top: 1rem; padding: 0.85rem 1rem; background: var(--danger-bg); border: 1.5px solid var(--danger); border-radius: var(--radius-md);">
                     <div style="display: flex; gap: 0.6rem; align-items: flex-start;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--danger); flex-shrink: 0; margin-top: 1px;">
@@ -358,7 +346,6 @@
                     </div>
                 </div>
 
-                <!-- 2-Step Typed Confirmation -->
                 <div id="restoreConfirmSection" style="display: none; margin-top: 1.15rem;">
                     <div class="form-group" style="margin-bottom: 0;">
                         <label style="font-size: 0.82rem; color: var(--text-secondary); display: block; margin-bottom: 0.4rem;">
@@ -381,13 +368,11 @@
         </div>
     </div>
 
-    <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
 
     <script>
         const BASE_PATH = "{{ request.script_root }}";
 
-        // Custom Toast System
         function showToast(message, type = 'error', duration = 3500) {
             const container = document.getElementById('toastContainer');
             if (!container) return;
@@ -428,14 +413,11 @@
             }, 200);
         }
 
-        // Toggle VPN Service Flow with 2-Step Confirmation
         function onVpnToggleChange(checkbox) {
             if (!checkbox.checked) {
-                // User is attempting to turn OFF -> Revert switch state immediately & show confirmation modal
                 checkbox.checked = true;
                 openConfirmVpnModal();
             } else {
-                // User is turning ON -> Proceed directly
                 executeVpnToggle(true);
             }
         }
@@ -500,7 +482,6 @@
             }
         }
 
-        // Modal Functions
         function openCredentialsModal() {
             document.getElementById('changeCredentialsForm').reset();
             document.getElementById('new_username').value = "{{ current_admin }}";
@@ -550,7 +531,6 @@
             if (event.target == document.getElementById('restoreModal')) closeRestoreModal();
         }
 
-        // Restore Database Workflow
         let selectedRestoreFile = null;
         let isRestoreFileValid = false;
 
@@ -559,7 +539,7 @@
             isRestoreFileValid = false;
             const fileInput = document.getElementById('restoreFileInput');
             if (fileInput) fileInput.value = '';
-            
+
             const dropzone = document.getElementById('restoreDropzone');
             const dropTitle = document.getElementById('restoreDropzoneTitle');
             const dropSub = document.getElementById('restoreDropzoneSub');
@@ -737,7 +717,6 @@
             }
         }
 
-        // Form Validation & Submit
         function showFieldError(input, msg) {
             if (!input) return;
             input.classList.add('input-error');
