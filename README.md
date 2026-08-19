@@ -92,9 +92,45 @@ Since IKE-UI uses standard IKEv2/IPsec with EAP-MSCHAPv2, clients can connect us
 5. Save and connect.
 
 #### Windows 10 / 11
+
+> [!NOTE]
+> If your Windows device or the VPN server is behind a NAT router (common in home/office networks), run this command in **Command Prompt (Run as Administrator)** once and restart your computer to enable IPsec NAT-Traversal:
+> ```cmd
+> reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\PolicyAgent" /v "AssumeUDPEncapsulationContextOnSendRule" /t REG_DWORD /d 2 /f
+> ```
+
 1. Go to **Settings** > **Network & internet** > **VPN**.
-2. Click **Add VPN**.
-3. Set VPN provider to **Windows (built-in)**.
-4. Set VPN type to **IKEv2**.
-5. Set Type of sign-in info to **User name and password**.
-6. Enter your Server name/address and user credentials, then save.
+2. Click **Add VPN** (or **Add a VPN connection**).
+3. Set **VPN provider** to `Windows (built-in)`.
+4. Set **Connection name** to any name (e.g. `MyVPN`).
+5. Set **Server name or address** to your server domain (e.g., `vpn.example.com`).
+6. Set **VPN type** to `IKEv2`.
+7. Set **Type of sign-in info** to `User name and password`.
+8. Enter your **User name** and **Password** (created in the IKE-UI panel), then save and click **Connect**.
+
+#### Linux (Ubuntu / Debian)
+
+##### 1. Install Required Client Packages
+Install NetworkManager StrongSwan and EAP-MSCHAPv2 authentication modules:
+```bash
+sudo apt update && sudo apt install -y network-manager-strongswan libcharon-extra-plugins libcharon-extauth-plugins
+```
+
+##### 2. Connect via Terminal (nmcli)
+```bash
+nmcli connection add type vpn vpn-type strongswan con-name "MyVPN" \
+  vpn.data "address=vpn.example.com, method=eap, user=USERNAME, certificate=/etc/ssl/certs/ISRG_Root_X1.pem, virtual=yes" \
+  vpn.secrets "password=PASSWORD"
+
+nmcli connection up "MyVPN"
+```
+
+##### 3. Connect via Desktop GUI (GNOME / KDE)
+1. Open **Settings** > **Network** > **VPN** and click **+**.
+2. Select **IPsec/IKEv2 (strongswan)**.
+3. Set **Gateway:** `vpn.example.com`
+4. Set **Authentication:** `EAP (username/password)`
+5. Enter your **Username** and **Password**.
+6. Set **CA Certificate:** Select `/etc/ssl/certs/ISRG_Root_X1.pem` (or `/etc/ssl/certs/ca-certificates.crt`).
+7. Save and toggle **Connect**.
+
