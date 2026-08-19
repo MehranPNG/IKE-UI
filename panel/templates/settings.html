@@ -325,6 +325,8 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <script>
+        const BASE_PATH = "{{ request.script_root }}";
+
         // Custom Toast System
         function showToast(message, type = 'error', duration = 3500) {
             const container = document.getElementById('toastContainer');
@@ -398,7 +400,7 @@
             if (toggle) toggle.disabled = true;
 
             try {
-                const response = await fetch('/settings/toggle-vpn', {
+                const response = await fetch(`${BASE_PATH}/settings/toggle-vpn`, {
                     method: 'POST',
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest',
@@ -551,7 +553,7 @@
             formData.append('backup_file', file);
 
             try {
-                const response = await fetch('/restore/users/validate', {
+                const response = await fetch(`${BASE_PATH}/restore/users/validate`, {
                     method: 'POST',
                     headers: { 'X-Requested-With': 'XMLHttpRequest' },
                     body: formData
@@ -623,7 +625,7 @@
             formData.append('confirmation', typed);
 
             try {
-                const response = await fetch('/restore/users/execute', {
+                const response = await fetch(`${BASE_PATH}/restore/users/execute`, {
                     method: 'POST',
                     headers: { 'X-Requested-With': 'XMLHttpRequest' },
                     body: formData
@@ -727,7 +729,7 @@
             const formData = new FormData(form);
 
             try {
-                const response = await fetch('/settings', {
+                const response = await fetch(`${BASE_PATH}/settings`, {
                     method: 'POST',
                     headers: { 'X-Requested-With': 'XMLHttpRequest' },
                     body: formData

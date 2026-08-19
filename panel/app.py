@@ -17,12 +17,13 @@ import tempfile
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response, stream_with_context, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get("DB_PATH", "/etc/strongswan-panel/panel.db")
 SECRETS_PATH = os.environ.get("SECRETS_PATH", "/etc/ipsec.secrets")
 SECRET_KEY_PATH = os.environ.get("SECRET_KEY_PATH", "/etc/strongswan-panel/secret.key")
-SERVER_DOMAIN = os.environ.get("SERVER_DOMAIN", "faghir.seytann.com")
+SERVER_DOMAIN = os.environ.get("SERVER_DOMAIN", "vpn.example.com")
 PANEL_PORT = int(os.environ.get("PANEL_PORT", 8000))
 
 def generate_random_pwd(length=8):
@@ -56,12 +57,21 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.4.4"
+APP_VERSION = "1.4.5"
 
 app = Flask(
     __name__,
     template_folder=os.path.join(BASE_DIR, "templates"),
     static_folder=os.path.join(BASE_DIR, "static")
+)
+
+app.wsgi_app = ProxyFix(
+    app.wsgi_app,
+    x_for=1,
+    x_proto=1,
+    x_host=1,
+    x_port=1,
+    x_prefix=1
 )
 
 app.secret_key = get_persistent_secret_key()
@@ -86,7 +96,8 @@ def inject_globals():
     return dict(
         app_version=APP_VERSION,
         current_admin=session.get("admin_user", ""),
-        vpn_enabled=(get_system_config("vpn_enabled", "1") == "1")
+        vpn_enabled=(get_system_config("vpn_enabled", "1") == "1"),
+        base_path=request.script_root
     )
 
 prev_cpu_times = None
@@ -298,11 +309,13 @@ def init_db():
 
         cursor.execute("UPDATE users SET max_devices = 10 WHERE max_devices IS NULL OR max_devices <= 0 OR max_devices > 10")
         
-        cursor.execute("SELECT * FROM admin WHERE username = 'admin'")
-        if not cursor.fetchone():
-            default_hash = generate_password_hash("admin123")
+        cursor.execute("SELECT COUNT(*) as cnt FROM admin")
+        if cursor.fetchone()["cnt"] == 0:
+            rand_admin_user = ''.join(secrets.choice(string.ascii_lowercase) for _ in range(8))
+            rand_admin_pass = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
+            default_hash = generate_password_hash(rand_admin_pass)
             now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cursor.execute("INSERT INTO admin (username, password_hash, created_at) VALUES ('admin', ?, ?)", (default_hash, now))
+            cursor.execute("INSERT INTO admin (username, password_hash, created_at) VALUES (?, ?, ?)", (rand_admin_user, default_hash, now))
             
         cursor.execute("SELECT COUNT(*) as cnt FROM users")
         if cursor.fetchone()["cnt"] == 0:

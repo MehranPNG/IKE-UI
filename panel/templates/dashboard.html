@@ -838,6 +838,8 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <script>
+        const BASE_PATH = "{{ request.script_root }}";
+
         // Custom Toast System
         function showToast(message, type = 'error', duration = 3500) {
             const container = document.getElementById('toastContainer');
@@ -919,7 +921,7 @@
                 `Are you sure you want to delete user <strong>${username}</strong>?<br><span style="color: var(--text-muted); font-size: 0.8rem; margin-top: 4px; display: inline-block;">This action cannot be undone.</span>`,
                 'Delete User',
                 () => {
-                    window.location.href = `/user/delete/${userId}`;
+                    window.location.href = `${BASE_PATH}/user/delete/${userId}`;
                 }
             );
         }
@@ -1171,7 +1173,7 @@
                 updateUserInfoModalContent(targetUser);
             }
             
-            fetch(`/api/user/info/${userId}`)
+            fetch(`${BASE_PATH}/api/user/info/${userId}`)
                 .then(r => r.ok ? r.json() : null)
                 .then(res => {
                     if (res && res.success && res.user && String(activeInfoUserId) === String(userId)) {
@@ -1653,7 +1655,7 @@
             const formData = new FormData(form);
 
             try {
-                const response = await fetch('/user/add', {
+                const response = await fetch(`${BASE_PATH}/user/add`, {
                     method: 'POST',
                     headers: { 'X-Requested-With': 'XMLHttpRequest' },
                     body: formData
@@ -1747,7 +1749,7 @@
             const formData = new FormData(form);
 
             try {
-                const response = await fetch('/user/edit/' + currentEditUserId, {
+                const response = await fetch(`${BASE_PATH}/user/edit/` + currentEditUserId, {
                     method: 'POST',
                     headers: { 'X-Requested-With': 'XMLHttpRequest' },
                     body: formData
@@ -1852,7 +1854,7 @@
             
             checkbox.disabled = true;
             try {
-                const response = await fetch('/user/toggle/' + userId, {
+                const response = await fetch(`${BASE_PATH}/user/toggle/` + userId, {
                     method: 'POST',
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest',
@@ -1895,7 +1897,7 @@
             if (sseSource) {
                 sseSource.close();
             }
-            sseSource = new EventSource("/api/stream");
+            sseSource = new EventSource(`${BASE_PATH}/api/stream`);
             
             sseSource.onmessage = function(e) {
                 try {

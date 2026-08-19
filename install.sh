@@ -2,7 +2,7 @@
 set -e
 
 REPO_URL="https://github.com/MehranPNG/IKE-UI.git"
-APP_VERSION="1.4.4"
+APP_VERSION="1.4.5"
 INSTALL_DIR="/opt/ike-ui"
 PANEL_DIR="${INSTALL_DIR}/panel"
 DB_DIR="/etc/strongswan-panel"
@@ -21,6 +21,175 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+generate_rand_user() {
+    tr -dc 'a-z' < /dev/urandom 2>/dev/null | head -c 8 || python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_lowercase) for _ in range(8)))"
+}
+
+generate_rand_pass() {
+    tr -dc 'a-zA-Z0-9' < /dev/urandom 2>/dev/null | head -c 12 || python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12)))"
+}
+
+generate_rand_path() {
+    tr -dc 'a-zA-Z0-9' < /dev/urandom 2>/dev/null | head -c 16 || python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(16)))"
+}
+
+is_port_in_use() {
+    local p="$1"
+    if [ -z "$p" ]; then
+        return 1
+    fi
+    if command -v ss >/dev/null 2>&1; then
+        if ss -tulpn 2>/dev/null | grep -qE "[: ]${p}\b"; then
+            return 0
+        fi
+    elif command -v netstat >/dev/null 2>&1; then
+        if netstat -tuln 2>/dev/null | grep -qE "[: ]${p}\b"; then
+            return 0
+        fi
+    elif command -v lsof >/dev/null 2>&1; then
+        if lsof -iTCP:"${p}" -sTCP:LISTEN >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+
+    # Fallback to python socket test
+    python3 -c "
+import socket, sys
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(('0.0.0.0', int('$p')))
+    s.close()
+    sys.exit(1)
+except Exception:
+    sys.exit(0)
+" 2>/dev/null && return 0
+
+    return 1
+}
+
+get_current_domain() {
+    local d=""
+    if [ -f "${DB_PATH}" ]; then
+        d=$(sqlite3 "${DB_PATH}" "SELECT value FROM system_config WHERE key='server_domain';" 2>/dev/null || true)
+    fi
+    if [ -z "$d" ] && [ -f /etc/systemd/system/ike-ui.service ]; then
+        d=$(grep -oP 'Environment="SERVER_DOMAIN=\K[^"]+' /etc/systemd/system/ike-ui.service 2>/dev/null || true)
+    fi
+    if [ -z "$d" ] && [ -f /etc/nginx/sites-available/ike-ui ]; then
+        d=$(grep -oP 'server_name\s+\K[^;]+' /etc/nginx/sites-available/ike-ui 2>/dev/null | head -n1 | tr -d ' ' || true)
+    fi
+    echo "$d"
+}
+
+get_current_port() {
+    local p=""
+    if [ -f "${DB_PATH}" ]; then
+        p=$(sqlite3 "${DB_PATH}" "SELECT value FROM system_config WHERE key='panel_port';" 2>/dev/null || true)
+    fi
+    if [ -z "$p" ] && [ -f /etc/nginx/sites-available/ike-ui ]; then
+        p=$(grep -oP 'listen\s+\K[0-9]+(?=\s+ssl)' /etc/nginx/sites-available/ike-ui 2>/dev/null | head -n1 || true)
+    fi
+    echo "${p:-443}"
+}
+
+get_current_path() {
+    local path=""
+    if [ -f "${DB_PATH}" ]; then
+        path=$(sqlite3 "${DB_PATH}" "SELECT value FROM system_config WHERE key='panel_path';" 2>/dev/null || true)
+    fi
+    if [ -z "$path" ] && [ -f /etc/nginx/sites-available/ike-ui ]; then
+        path=$(grep -oP 'location\s+/\K[^/{\s]+(?=/\s*\{)' /etc/nginx/sites-available/ike-ui 2>/dev/null | head -n1 || true)
+    fi
+    echo "$path"
+}
+
+generate_nginx_config() {
+    local domain="$1"
+    local port="${2:-443}"
+    local path="$3"
+
+    path=$(echo "$path" | sed -e 's|^/*||' -e 's|/*$||')
+
+    local redirect_port=""
+    if [ "$port" != "443" ]; then
+        redirect_port=":${port}"
+    fi
+
+    cat > /etc/nginx/sites-available/ike-ui << NGINX_EOF
+server {
+    listen 80;
+    server_name ${domain};
+    return 301 https://\$host${redirect_port}\$request_uri;
+}
+
+server {
+    listen ${port} ssl http2;
+    server_name ${domain};
+
+    ssl_certificate /etc/letsencrypt/live/${domain}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+NGINX_EOF
+
+    if [ -n "$path" ]; then
+        cat >> /etc/nginx/sites-available/ike-ui << NGINX_EOF
+
+    location = /${path} {
+        return 301 /${path}/;
+    }
+
+    location /${path}/ {
+        proxy_pass http://127.0.0.1:8000/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Port \$server_port;
+        proxy_set_header X-Forwarded-Prefix /${path};
+
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 86400s;
+        proxy_set_header Connection '';
+        proxy_http_version 1.1;
+        chunked_transfer_encoding off;
+    }
+
+    location / {
+        return 404;
+    }
+}
+NGINX_EOF
+    else
+        cat >> /etc/nginx/sites-available/ike-ui << NGINX_EOF
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Port \$server_port;
+        proxy_set_header X-Forwarded-Prefix "";
+
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 86400s;
+        proxy_set_header Connection '';
+        proxy_http_version 1.1;
+        chunked_transfer_encoding off;
+    }
+}
+NGINX_EOF
+    fi
+
+    rm -f /etc/nginx/sites-enabled/default
+    ln -sf /etc/nginx/sites-available/ike-ui /etc/nginx/sites-enabled/ike-ui
+}
+
 show_banner() {
     clear 2>/dev/null || true
     local cur_ver="$APP_VERSION"
@@ -29,7 +198,7 @@ show_banner() {
         disk_ver=$(grep -oP '^APP_VERSION=["\x27]?\K[^"\x27\s]+' "${INSTALL_DIR}/install.sh" 2>/dev/null || true)
         if [ -n "$disk_ver" ]; then
             cur_ver="$disk_ver"
-            APP_VERSION="1.4.4"
+            APP_VERSION="$disk_ver"
         fi
     fi
     echo -e "${PURPLE}${BOLD}"
@@ -44,20 +213,27 @@ show_banner() {
 BANNER
     echo -e "${CYAN}====================================================${NC}"
     
-    local panel_domain=""
-    if [ -f /etc/systemd/system/ike-ui.service ]; then
-        panel_domain=$(grep -oP 'Environment="SERVER_DOMAIN=\K[^"]+' /etc/systemd/system/ike-ui.service 2>/dev/null || true)
-    fi
-    if [ -z "$panel_domain" ] && [ -f /etc/nginx/sites-available/ike-ui ]; then
-        panel_domain=$(grep -oP 'server_name\s+\K[^;]+' /etc/nginx/sites-available/ike-ui 2>/dev/null | head -n1 | tr -d ' ' || true)
-    fi
+    local panel_domain
+    panel_domain=$(get_current_domain)
+    local panel_port
+    panel_port=$(get_current_port)
+    local panel_path
+    panel_path=$(get_current_path)
 
     if [ -n "$panel_domain" ]; then
         local status_badge="${GREEN}● Online${NC}"
         if ! systemctl is-active --quiet ike-ui 2>/dev/null && ! systemctl is-active --quiet ikev2-panel 2>/dev/null; then
             status_badge="${RED}○ Stopped${NC}"
         fi
-        echo -e " ${BOLD}Panel URL:${NC} ${CYAN}https://${panel_domain}${NC} [${status_badge}]"
+        local port_display=""
+        if [ "$panel_port" != "443" ] && [ -n "$panel_port" ]; then
+            port_display=":${panel_port}"
+        fi
+        local path_display=""
+        if [ -n "$panel_path" ] && [ "$panel_path" != "/" ]; then
+            path_display="/${panel_path#/}"
+        fi
+        echo -e " ${BOLD}Panel URL:${NC} ${CYAN}https://${panel_domain}${port_display}${path_display}${NC} [${status_badge}]"
         echo -e "${CYAN}====================================================${NC}"
     fi
     echo -e "${NC}"
@@ -168,11 +344,22 @@ apply_firewall() {
     iptables -t mangle -C FORWARD -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1360 2>/dev/null || \
         iptables -t mangle -A FORWARD -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1360
 
+    local current_port
+    current_port=$(get_current_port)
+
     if command -v ufw >/dev/null 2>&1; then
         ufw allow 500/udp >/dev/null 2>&1 || true
         ufw allow 4500/udp >/dev/null 2>&1 || true
         ufw allow 80/tcp >/dev/null 2>&1 || true
         ufw allow 443/tcp >/dev/null 2>&1 || true
+        if [ -n "$current_port" ] && [ "$current_port" != "443" ] && [ "$current_port" != "80" ]; then
+            ufw allow "${current_port}/tcp" >/dev/null 2>&1 || true
+        fi
+    fi
+
+    if [ -n "$current_port" ] && [ "$current_port" != "443" ] && [ "$current_port" != "80" ]; then
+        iptables -C INPUT -p tcp --dport "${current_port}" -j ACCEPT 2>/dev/null || \
+            iptables -A INPUT -p tcp --dport "${current_port}" -j ACCEPT 2>/dev/null || true
     fi
 }
 
@@ -206,17 +393,75 @@ install_all() {
     fi
 
     echo ""
-    read -rp "Enter Admin Username [default: admin]: " ADMIN_USER
-    ADMIN_USER=${ADMIN_USER:-admin}
+    while true; do
+        read -rp "Enter Panel Web Port [default: 443]: " PANEL_PORT
+        PANEL_PORT=${PANEL_PORT:-443}
+        if [[ ! "$PANEL_PORT" =~ ^[0-9]+$ ]] || [ "$PANEL_PORT" -lt 1 ] || [ "$PANEL_PORT" -gt 65535 ]; then
+            echo -e "${RED}[X] Invalid port number. Must be between 1 and 65535.${NC}"
+            continue
+        fi
+        if [ "$PANEL_PORT" -eq 500 ] || [ "$PANEL_PORT" -eq 4500 ]; then
+            echo -e "${RED}[X] Port ${PANEL_PORT} is reserved for StrongSwan IKEv2 VPN.${NC}"
+            continue
+        fi
+        if [ "$PANEL_PORT" -eq 80 ]; then
+            echo -e "${RED}[X] Port 80 is reserved for Let's Encrypt / HTTP validation.${NC}"
+            continue
+        fi
+        if [ "$PANEL_PORT" -ne 443 ] && is_port_in_use "$PANEL_PORT"; then
+            echo -e "${RED}[X] Port ${PANEL_PORT} is currently in use by another service! Please choose a different port.${NC}"
+            continue
+        fi
+        break
+    done
 
-    read -rp "Enter Admin Password [default: admin123]: " ADMIN_PASS
-    ADMIN_PASS=${ADMIN_PASS:-admin123}
+    echo ""
+    local rand_path
+    rand_path=$(generate_rand_path)
+    read -rp "Enter Panel Secret Path [default: random 16-chars (${rand_path})]: " PANEL_PATH
+    PANEL_PATH=${PANEL_PATH:-$rand_path}
+    PANEL_PATH=$(echo "$PANEL_PATH" | sed -e 's|^/*||' -e 's|/*$||' | tr -cd 'a-zA-Z0-9_-')
+    if [ -z "$PANEL_PATH" ]; then
+        PANEL_PATH="$rand_path"
+    fi
+
+    echo ""
+    local rand_user
+    rand_user=$(generate_rand_user)
+    read -rp "Enter Admin Username [default: random 8-letters (${rand_user})]: " ADMIN_USER
+    ADMIN_USER=${ADMIN_USER:-$rand_user}
+    ADMIN_USER=$(echo "$ADMIN_USER" | tr -cd 'a-zA-Z0-9_@.-')
+    if [ -z "$ADMIN_USER" ]; then
+        ADMIN_USER="$rand_user"
+    fi
+
+    local rand_pass
+    rand_pass=$(generate_rand_pass)
+    read -rp "Enter Admin Password [default: random 12-chars (${rand_pass})]: " ADMIN_PASS
+    ADMIN_PASS=${ADMIN_PASS:-$rand_pass}
+    if [ -z "$ADMIN_PASS" ]; then
+        ADMIN_PASS="$rand_pass"
+    fi
+
+    local port_str=""
+    if [ "$PANEL_PORT" != "443" ]; then
+        port_str=":${PANEL_PORT}"
+    fi
+    local path_str=""
+    if [ -n "$PANEL_PATH" ] && [ "$PANEL_PATH" != "/" ]; then
+        path_str="/${PANEL_PATH}"
+    fi
+    local full_panel_url="https://${DOMAIN}${port_str}${path_str}"
 
     echo ""
     echo -e "${YELLOW}[*] Installation Summary:${NC}"
-    echo -e "  • Domain:     ${CYAN}${DOMAIN}${NC}"
-    echo -e "  • Admin User: ${CYAN}${ADMIN_USER}${NC}"
-    echo -e "  • IP/Iface:   ${CYAN}${SERVER_IP} (${NET_IFACE})${NC}"
+    echo -e "  • Domain:      ${CYAN}${DOMAIN}${NC}"
+    echo -e "  • Web Port:    ${CYAN}${PANEL_PORT}${NC}"
+    echo -e "  • Secret Path: ${CYAN}/${PANEL_PATH}${NC}"
+    echo -e "  • Panel URL:   ${CYAN}${full_panel_url}${NC}"
+    echo -e "  • Admin User:  ${CYAN}${ADMIN_USER}${NC}"
+    echo -e "  • Admin Pass:  ${CYAN}${ADMIN_PASS}${NC}"
+    echo -e "  • IP/Iface:    ${CYAN}${SERVER_IP} (${NET_IFACE})${NC}"
     echo ""
     read -rp "Ready to proceed with installation? [y/N]: " confirm_install
     if [[ ! "$confirm_install" =~ ^[yY]([eE][sS])?$ ]]; then
@@ -376,6 +621,21 @@ if row:
     cursor.execute('UPDATE admin SET username = ?, password_hash = ? WHERE id = ?', ('${ADMIN_USER}', generate_password_hash('${ADMIN_PASS}'), row['id']))
 else:
     cursor.execute('INSERT INTO admin (username, password_hash) VALUES (?, ?)', ('${ADMIN_USER}', generate_password_hash('${ADMIN_PASS}')))
+
+# Store configuration in system_config
+cursor.execute('''
+    INSERT INTO system_config (key, value) VALUES ('server_domain', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+''', ('${DOMAIN}',))
+cursor.execute('''
+    INSERT INTO system_config (key, value) VALUES ('panel_port', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+''', ('${PANEL_PORT}',))
+cursor.execute('''
+    INSERT INTO system_config (key, value) VALUES ('panel_path', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+''', ('${PANEL_PATH}',))
+
 conn.commit()
 
 cursor.execute('SELECT username, password FROM users ORDER BY id ASC LIMIT 1')
@@ -416,42 +676,7 @@ SERVICE_EOF
     ln -sf /etc/systemd/system/ike-ui.service /etc/systemd/system/ikev2-panel.service 2>/dev/null || true
 
     echo -e "${CYAN}[7/7] Configuring Nginx reverse proxy...${NC}"
-    cat > /etc/nginx/sites-available/ike-ui << NGINX_EOF
-server {
-    listen 80;
-    server_name ${DOMAIN};
-    return 301 https://\$host\$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name ${DOMAIN};
-
-    ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
-
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-
-        proxy_buffering off;
-        proxy_cache off;
-        proxy_read_timeout 86400s;
-        proxy_set_header Connection '';
-        proxy_http_version 1.1;
-        chunked_transfer_encoding off;
-    }
-}
-NGINX_EOF
-
-    rm -f /etc/nginx/sites-enabled/default
-    ln -sf /etc/nginx/sites-available/ike-ui /etc/nginx/sites-enabled/ike-ui
+    generate_nginx_config "$DOMAIN" "$PANEL_PORT" "$PANEL_PATH"
 
     systemctl daemon-reload
     systemctl enable strongswan-starter.service 2>/dev/null || systemctl enable strongswan.service 2>/dev/null || true
@@ -471,8 +696,10 @@ NGINX_EOF
     echo -e "  ${BOLD}Server IP:${NC}        ${YELLOW}${SERVER_IP}${NC}"
     echo -e "  ${BOLD}VPN Protocol:${NC}     ${GREEN}IKEv2 / IPsec (UDP 500 / 4500)${NC}"
     echo ""
-    echo -e "  ${BOLD}Panel Login:${NC}"
-    echo -e "     • URL:       ${CYAN}https://${DOMAIN}${NC}"
+    echo -e "  ${BOLD}Panel Access Details:${NC}"
+    echo -e "     • Full URL:  ${CYAN}${full_panel_url}${NC}"
+    echo -e "     • Web Port:  ${BOLD}${PANEL_PORT}${NC}"
+    echo -e "     • Path:      ${BOLD}/${PANEL_PATH}${NC}"
     echo -e "     • Username:  ${BOLD}${ADMIN_USER}${NC}"
     echo -e "     • Password:  ${BOLD}${ADMIN_PASS}${NC}"
     echo ""
@@ -613,7 +840,7 @@ app.init_db()
         new_ver=$(grep -oP '^APP_VERSION\s*=\s*["\x27]?\K[^"\x27\s]+' "${INSTALL_DIR}/panel/app.py" 2>/dev/null || true)
     fi
     if [ -n "$new_ver" ]; then
-        APP_VERSION="1.4.4"
+        APP_VERSION="$new_ver"
     fi
 
     if systemctl is-active --quiet ike-ui.service; then
@@ -732,10 +959,353 @@ print('[+] Administrator credentials for \'${NEW_USER}\' updated successfully.')
 "
 }
 
+change_panel_path() {
+    show_banner
+    echo -e "${BOLD}Change Panel Secret Path${NC}"
+    echo ""
+    local cur_domain cur_port cur_path
+    cur_domain=$(get_current_domain)
+    cur_port=$(get_current_port)
+    cur_path=$(get_current_path)
+
+    if [ -z "$cur_domain" ]; then
+        echo -e "${RED}[X] Error: IKE-UI is not fully installed or domain not found.${NC}"
+        return 1
+    fi
+
+    local port_str=""
+    if [ "$cur_port" != "443" ] && [ -n "$cur_port" ]; then
+        port_str=":${cur_port}"
+    fi
+    local path_str=""
+    if [ -n "$cur_path" ] && [ "$cur_path" != "/" ]; then
+        path_str="/${cur_path#/}"
+    fi
+
+    echo -e "  ${BOLD}Current Path:${NC}      ${CYAN}${path_str:-/(root)}${NC}"
+    echo -e "  ${BOLD}Current Panel URL:${NC} ${CYAN}https://${cur_domain}${port_str}${path_str}${NC}"
+    echo ""
+
+    local rand_path
+    rand_path=$(generate_rand_path)
+    read -rp "Enter new Secret Path [default: random 16-chars (${rand_path}), or '/' for root]: " NEW_PATH
+    NEW_PATH=${NEW_PATH:-$rand_path}
+    if [[ "$NEW_PATH" == "/" || "$NEW_PATH" == "root" ]]; then
+        NEW_PATH=""
+    else
+        NEW_PATH=$(echo "$NEW_PATH" | sed -e 's|^/*||' -e 's|/*$||' | tr -cd 'a-zA-Z0-9_-')
+        if [ -z "$NEW_PATH" ]; then
+            NEW_PATH="$rand_path"
+        fi
+    fi
+
+    echo ""
+    echo -e "${CYAN}[*] Updating Nginx configuration...${NC}"
+    generate_nginx_config "$cur_domain" "$cur_port" "$NEW_PATH"
+
+    if ! nginx -t >/dev/null 2>&1; then
+        echo -e "${RED}[X] Error: Nginx configuration test failed. Reverting to previous path...${NC}"
+        generate_nginx_config "$cur_domain" "$cur_port" "$cur_path"
+        systemctl reload nginx 2>/dev/null || true
+        return 1
+    fi
+
+    systemctl reload nginx
+
+    if [ -f "${DB_PATH}" ]; then
+        sqlite3 "${DB_PATH}" "INSERT INTO system_config (key, value) VALUES ('panel_path', '${NEW_PATH}') ON CONFLICT(key) DO UPDATE SET value = excluded.value;" 2>/dev/null || true
+    fi
+
+    local new_path_str=""
+    if [ -n "$NEW_PATH" ]; then
+        new_path_str="/${NEW_PATH}"
+    fi
+    local new_full_url="https://${cur_domain}${port_str}${new_path_str}"
+
+    echo ""
+    echo -e "${GREEN}[+] Panel secret path updated successfully!${NC}"
+    echo -e "  ${BOLD}New Panel URL:${NC} ${CYAN}${new_full_url}${NC}"
+}
+
+change_panel_port() {
+    show_banner
+    echo -e "${BOLD}Change Panel Web Port${NC}"
+    echo ""
+    local cur_domain cur_port cur_path
+    cur_domain=$(get_current_domain)
+    cur_port=$(get_current_port)
+    cur_path=$(get_current_path)
+
+    if [ -z "$cur_domain" ]; then
+        echo -e "${RED}[X] Error: IKE-UI is not fully installed or domain not found.${NC}"
+        return 1
+    fi
+
+    local port_str=""
+    if [ "$cur_port" != "443" ] && [ -n "$cur_port" ]; then
+        port_str=":${cur_port}"
+    fi
+    local path_str=""
+    if [ -n "$cur_path" ] && [ "$cur_path" != "/" ]; then
+        path_str="/${cur_path#/}"
+    fi
+
+    echo -e "  ${BOLD}Current Port:${NC}      ${CYAN}${cur_port}${NC}"
+    echo -e "  ${BOLD}Current Panel URL:${NC} ${CYAN}https://${cur_domain}${port_str}${path_str}${NC}"
+    echo ""
+
+    local NEW_PORT
+    while true; do
+        read -rp "Enter new Panel Web Port [1-65535, default: 443]: " NEW_PORT
+        NEW_PORT=${NEW_PORT:-443}
+        if [[ ! "$NEW_PORT" =~ ^[0-9]+$ ]] || [ "$NEW_PORT" -lt 1 ] || [ "$NEW_PORT" -gt 65535 ]; then
+            echo -e "${RED}[X] Invalid port number. Must be between 1 and 65535.${NC}"
+            continue
+        fi
+        if [ "$NEW_PORT" -eq 500 ] || [ "$NEW_PORT" -eq 4500 ]; then
+            echo -e "${RED}[X] Port ${NEW_PORT} is reserved for StrongSwan IKEv2 VPN.${NC}"
+            continue
+        fi
+        if [ "$NEW_PORT" -eq 80 ]; then
+            echo -e "${RED}[X] Port 80 is reserved for Let's Encrypt / HTTP validation.${NC}"
+            continue
+        fi
+        if [ "$NEW_PORT" != "$cur_port" ] && is_port_in_use "$NEW_PORT"; then
+            echo -e "${RED}[X] Port ${NEW_PORT} is currently in use by another service! Please choose a different port.${NC}"
+            continue
+        fi
+        break
+    done
+
+    echo ""
+    echo -e "${CYAN}[*] Updating Nginx configuration & firewall rules...${NC}"
+    generate_nginx_config "$cur_domain" "$NEW_PORT" "$cur_path"
+
+    if ! nginx -t >/dev/null 2>&1; then
+        echo -e "${RED}[X] Error: Nginx configuration test failed. Reverting to previous port...${NC}"
+        generate_nginx_config "$cur_domain" "$cur_port" "$cur_path"
+        systemctl reload nginx 2>/dev/null || true
+        return 1
+    fi
+
+    if [ "$NEW_PORT" != "443" ] && [ "$NEW_PORT" != "80" ]; then
+        if command -v ufw >/dev/null 2>&1; then
+            ufw allow "${NEW_PORT}/tcp" >/dev/null 2>&1 || true
+        fi
+        iptables -C INPUT -p tcp --dport "${NEW_PORT}" -j ACCEPT 2>/dev/null || \
+            iptables -A INPUT -p tcp --dport "${NEW_PORT}" -j ACCEPT 2>/dev/null || true
+    fi
+
+    systemctl reload nginx
+
+    if [ -f "${DB_PATH}" ]; then
+        sqlite3 "${DB_PATH}" "INSERT INTO system_config (key, value) VALUES ('panel_port', '${NEW_PORT}') ON CONFLICT(key) DO UPDATE SET value = excluded.value;" 2>/dev/null || true
+    fi
+
+    local new_port_str=""
+    if [ "$NEW_PORT" != "443" ]; then
+        new_port_str=":${NEW_PORT}"
+    fi
+    local new_full_url="https://${cur_domain}${new_port_str}${path_str}"
+
+    echo ""
+    echo -e "${GREEN}[+] Panel web port updated successfully!${NC}"
+    echo -e "  ${BOLD}New Panel URL:${NC} ${CYAN}${new_full_url}${NC}"
+}
+
+manage_panel_access() {
+    while true; do
+        show_banner
+        echo -e "${BOLD}Panel Access & Administrator Settings${NC}"
+        echo ""
+        echo -e "  ${CYAN}1)${NC}  Change Admin Username & Password"
+        echo -e "  ${CYAN}2)${NC}  Change Panel Secret Path"
+        echo -e "  ${CYAN}3)${NC}  Change Panel Web Port"
+        echo -e "  ${CYAN}0)${NC}  Back to Main Menu"
+        echo ""
+        read -rp "Enter choice [0-3]: " access_choice
+        case "$access_choice" in
+            1)
+                reset_admin_credentials
+                echo ""
+                read -rp "Press Enter to continue..."
+                ;;
+            2)
+                change_panel_path
+                echo ""
+                read -rp "Press Enter to continue..."
+                ;;
+            3)
+                change_panel_port
+                echo ""
+                read -rp "Press Enter to continue..."
+                ;;
+            0)
+                return 0
+                ;;
+            *)
+                echo -e "${RED}Invalid option.${NC}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
 renew_ssl() {
     echo -e "${YELLOW}[*] Testing and renewing Let's Encrypt certificates...${NC}"
     certbot renew --deploy-hook "/etc/letsencrypt/renewal-hooks/deploy/strongswan.sh"
     echo -e "${GREEN}[+] SSL renewal completed.${NC}"
+}
+
+change_server_domain() {
+    show_banner
+    echo -e "${BOLD}Change Server Domain / Subdomain${NC}"
+    echo ""
+    local cur_domain cur_port cur_path
+    cur_domain=$(get_current_domain)
+    cur_port=$(get_current_port)
+    cur_path=$(get_current_path)
+
+    if [ -z "$cur_domain" ]; then
+        echo -e "${RED}[X] Error: IKE-UI is not fully installed or current domain is missing.${NC}"
+        return 1
+    fi
+
+    echo -e "  ${BOLD}Current Domain:${NC} ${CYAN}https://${cur_domain}${NC}"
+    echo ""
+    echo -e "${RED}${BOLD}[!] WARNING: Changing the domain will issue a new SSL certificate and update StrongSwan IPsec.${NC}"
+    echo -e "${YELLOW}[!] All active VPN client connections will be disconnected, and users must update the server domain in their client settings.${NC}"
+    echo ""
+    read -rp "Do you want to proceed with domain migration? [y/N]: " confirm_1
+    if [[ ! "$confirm_1" =~ ^[yY]([eE][sS])?$ ]]; then
+        echo -e "${YELLOW}[*] Domain change cancelled.${NC}"
+        return 0
+    fi
+
+    echo ""
+    read -rp "Enter New Domain Name (e.g. vpn2.example.com): " NEW_DOMAIN
+    NEW_DOMAIN=$(echo "$NEW_DOMAIN" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+    if [ -z "$NEW_DOMAIN" ]; then
+        echo -e "${RED}[X] Error: New domain cannot be empty.${NC}"
+        return 1
+    fi
+    if [ "$NEW_DOMAIN" == "$cur_domain" ]; then
+        echo -e "${YELLOW}[*] The entered domain is the same as current domain.${NC}"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${RED}${BOLD}[!] Step 2: Final Confirmation${NC}"
+    echo -e "  • Old Domain: ${YELLOW}${cur_domain}${NC}"
+    echo -e "  • New Domain: ${GREEN}${NEW_DOMAIN}${NC}"
+    read -rp "Are you sure you want to apply domain migration now? [y/N]: " confirm_2
+    if [[ ! "$confirm_2" =~ ^[yY]([eE][sS])?$ ]]; then
+        echo -e "${YELLOW}[*] Domain change cancelled.${NC}"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${CYAN}[1/5] Stopping Nginx for SSL certificate provisioning...${NC}"
+    systemctl stop nginx 2>/dev/null || true
+
+    echo -e "${CYAN}[2/5] Obtaining SSL certificate for ${NEW_DOMAIN}...${NC}"
+    if [ -d "/etc/letsencrypt/live/${NEW_DOMAIN}" ] && [ -f "/etc/letsencrypt/live/${NEW_DOMAIN}/fullchain.pem" ]; then
+        echo -e "${GREEN}[+] Existing certificate found for ${NEW_DOMAIN}.${NC}"
+    else
+        if ! certbot certonly --standalone \
+            --agree-tos \
+            --no-eff-email \
+            -m "admin@${NEW_DOMAIN}" \
+            -d "${NEW_DOMAIN}" \
+            --key-type rsa \
+            --rsa-key-size 2048 \
+            --non-interactive; then
+            echo -e "${RED}[X] Failed to obtain SSL certificate for ${NEW_DOMAIN}.${NC}"
+            echo -e "${YELLOW}[*] Restoring Nginx with existing configuration...${NC}"
+            systemctl start nginx 2>/dev/null || true
+            return 1
+        fi
+    fi
+
+    echo -e "${CYAN}[3/5] Updating certificate files for StrongSwan...${NC}"
+    mkdir -p /etc/ipsec.d/certs /etc/ipsec.d/cacerts /etc/ipsec.d/private
+    cp "/etc/letsencrypt/live/${NEW_DOMAIN}/cert.pem" /etc/ipsec.d/certs/cert.pem
+    cp "/etc/letsencrypt/live/${NEW_DOMAIN}/chain.pem" /etc/ipsec.d/cacerts/chain.pem
+    cp "/etc/letsencrypt/live/${NEW_DOMAIN}/privkey.pem" /etc/ipsec.d/private/privkey.pem
+    chmod 600 /etc/ipsec.d/private/privkey.pem
+    chmod 644 /etc/ipsec.d/certs/cert.pem /etc/ipsec.d/cacerts/chain.pem
+
+    echo -e "${CYAN}[4/5] Updating StrongSwan, Systemd, and Nginx configurations...${NC}"
+    if [ -f /etc/ipsec.conf ]; then
+        sed -i "s|leftid=@.*|leftid=@${NEW_DOMAIN}|g" /etc/ipsec.conf
+    fi
+    if [ -f /etc/systemd/system/ike-ui.service ]; then
+        sed -i "s|Environment=\"SERVER_DOMAIN=.*\"|Environment=\"SERVER_DOMAIN=${NEW_DOMAIN}\"|g" /etc/systemd/system/ike-ui.service
+    fi
+    if [ -f "${DB_PATH}" ]; then
+        sqlite3 "${DB_PATH}" "INSERT INTO system_config (key, value) VALUES ('server_domain', '${NEW_DOMAIN}') ON CONFLICT(key) DO UPDATE SET value = excluded.value;" 2>/dev/null || true
+    fi
+
+    generate_nginx_config "$NEW_DOMAIN" "$cur_port" "$cur_path"
+
+    echo -e "${CYAN}[5/5] Restarting services...${NC}"
+    systemctl daemon-reload
+    systemctl restart strongswan-starter.service 2>/dev/null || systemctl restart strongswan.service 2>/dev/null || ipsec restart 2>/dev/null || true
+    systemctl restart ike-ui.service
+    systemctl restart nginx.service
+
+    local port_str=""
+    if [ "$cur_port" != "443" ] && [ -n "$cur_port" ]; then
+        port_str=":${cur_port}"
+    fi
+    local path_str=""
+    if [ -n "$cur_path" ] && [ "$cur_path" != "/" ]; then
+        path_str="/${cur_path#/}"
+    fi
+    local new_panel_url="https://${NEW_DOMAIN}${port_str}${path_str}"
+
+    echo ""
+    echo -e "${GREEN}${BOLD}====================================================================${NC}"
+    echo -e "${GREEN}${BOLD}       Server Domain Successfully Migrated to: ${NEW_DOMAIN}       ${NC}"
+    echo -e "${GREEN}${BOLD}====================================================================${NC}"
+    echo ""
+    echo -e "  ${BOLD}New Domain:${NC}    ${CYAN}https://${NEW_DOMAIN}${NC}"
+    echo -e "  ${BOLD}New Panel URL:${NC} ${CYAN}${new_panel_url}${NC}"
+    echo ""
+    echo -e "${YELLOW}Please inform clients to update their VPN server address to: ${BOLD}${NEW_DOMAIN}${NC}"
+    echo -e "${GREEN}${BOLD}====================================================================${NC}"
+}
+
+manage_domain_ssl() {
+    while true; do
+        show_banner
+        echo -e "${BOLD}Domain & SSL Certificate Management${NC}"
+        echo ""
+        echo -e "  ${CYAN}1)${NC}  Renew Let's Encrypt SSL Certificate"
+        echo -e "  ${CYAN}2)${NC}  Change Server Domain / Subdomain (Full Migration)"
+        echo -e "  ${CYAN}0)${NC}  Back to Main Menu"
+        echo ""
+        read -rp "Enter choice [0-2]: " domain_choice
+        case "$domain_choice" in
+            1)
+                renew_ssl
+                echo ""
+                read -rp "Press Enter to continue..."
+                ;;
+            2)
+                change_server_domain
+                echo ""
+                read -rp "Press Enter to continue..."
+                ;;
+            0)
+                return 0
+                ;;
+            *)
+                echo -e "${RED}Invalid option.${NC}"
+                sleep 1
+                ;;
+        esac
+    done
 }
 
 uninstall_all() {
@@ -816,19 +1386,19 @@ show_help() {
     echo -e "Usage: ${CYAN}ike-ui${NC} [command]"
     echo ""
     echo -e "Commands:"
-    echo -e "  ${CYAN}(no arg)${NC}      Open interactive management menu"
-    echo -e "  ${CYAN}install, -i${NC}   Full installation and deployment"
-    echo -e "  ${CYAN}update, -u${NC} [release|dev]  Update IKE-UI (1: Tagged Release, 2: Dev Commit)"
-    echo -e "  ${CYAN}restart, -r${NC}   Restart all services (StrongSwan, Panel, Nginx)"
-    echo -e "  ${CYAN}start${NC}         Start all services"
-    echo -e "  ${CYAN}stop${NC}          Stop all services"
-    echo -e "  ${CYAN}status, -s${NC}    Check service status and active VPN connections"
-    echo -e "  ${CYAN}logs, -l${NC}      View live service logs"
-    echo -e "  ${CYAN}password, -p${NC}  Reset admin web panel credentials"
-    echo -e "  ${CYAN}ssl${NC}           Renew SSL certificates"
-    echo -e "  ${CYAN}uninstall${NC}     Uninstall IKE-UI and clean up"
-    echo -e "  ${CYAN}version, -v${NC}   Show current installed version"
-    echo -e "  ${CYAN}help, -h${NC}      Show this help message"
+    echo -e "  ${CYAN}(no arg)${NC}            Open interactive management menu"
+    echo -e "  ${CYAN}install, -i${NC}         Full installation and deployment"
+    echo -e "  ${CYAN}update, -u${NC} [1|2]    Update IKE-UI (1: Tagged Release, 2: Dev Commit)"
+    echo -e "  ${CYAN}restart, -r${NC}         Restart all services (StrongSwan, Panel, Nginx)"
+    echo -e "  ${CYAN}start${NC}               Start all services"
+    echo -e "  ${CYAN}stop${NC}                Stop all services"
+    echo -e "  ${CYAN}status, -s${NC}          Check service status and active VPN connections"
+    echo -e "  ${CYAN}logs, -l${NC}            View live service logs"
+    echo -e "  ${CYAN}access, -a, -p${NC}      Manage admin credentials, secret path, and web port"
+    echo -e "  ${CYAN}domain, -d, ssl${NC}     Manage domain migration and renew SSL certificates"
+    echo -e "  ${CYAN}uninstall${NC}           Uninstall IKE-UI and clean up"
+    echo -e "  ${CYAN}version, -v${NC}         Show current installed version"
+    echo -e "  ${CYAN}help, -h${NC}            Show this help message"
     echo ""
 }
 
@@ -843,8 +1413,8 @@ menu() {
         echo -e "  ${CYAN}5)${NC}  Start All Services"
         echo -e "  ${CYAN}6)${NC}  Check Status & Active VPN Connections"
         echo -e "  ${CYAN}7)${NC}  View Live Logs"
-        echo -e "  ${CYAN}8)${NC}  Reset Admin Panel Credentials"
-        echo -e "  ${CYAN}9)${NC}  Renew SSL Certificate"
+        echo -e "  ${CYAN}8)${NC}  Panel Access & Admin Settings (User/Pass, Path, Port)"
+        echo -e "  ${CYAN}9)${NC}  Domain & SSL Management (Renew SSL, Change Domain)"
         echo -e "  ${CYAN}10)${NC} Uninstall IKE-UI"
         echo -e "  ${CYAN}0)${NC}  Exit"
         echo ""
@@ -870,8 +1440,8 @@ menu() {
             5) start_services; read -rp "Press Enter to continue..." ;;
             6) check_status; read -rp "Press Enter to continue..." ;;
             7) view_logs ;;
-            8) reset_admin_credentials; read -rp "Press Enter to continue..." ;;
-            9) renew_ssl; read -rp "Press Enter to continue..." ;;
+            8) manage_panel_access ;;
+            9) manage_domain_ssl ;;
             10) 
                 uninstall_all
                 echo ""
@@ -924,11 +1494,11 @@ case "$1" in
     logs|-l|--logs)
         view_logs
         ;;
-    password|-p|--password)
-        reset_admin_credentials
+    access|-a|--access|password|-p|--password)
+        manage_panel_access
         ;;
-    ssl|--ssl)
-        renew_ssl
+    domain|-d|--domain|ssl|--ssl)
+        manage_domain_ssl
         ;;
     uninstall|--uninstall)
         uninstall_all
