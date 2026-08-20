@@ -2273,23 +2273,13 @@ input.input-error:focus {
     padding: 1.15rem 1.35rem;
 }
 
-.user-live-net-container {
-    display: flex;
-    flex-direction: column;
-    gap: 0.85rem;
-    margin-bottom: 0;
-}
-
 .user-live-net-card {
     background: var(--bg-surface);
     border: var(--border-width) solid var(--border-dark);
     border-radius: var(--radius-md);
     padding: 0.95rem 1.15rem;
     box-shadow: var(--shadow-sm);
-}
-
-.user-live-net-card-multi {
-    border-left: 3.5px solid var(--accent-cyan);
+    margin-bottom: 1.25rem;
 }
 
 .live-net-header {
@@ -2300,6 +2290,30 @@ input.input-error:focus {
     margin-bottom: 0.75rem;
     padding-bottom: 0.5rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.live-net-title {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-family: var(--font-heading);
+    font-size: 0.88rem;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.live-net-count-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.12rem 0.45rem;
+    font-family: var(--font-heading);
+    font-size: 0.68rem;
+    font-weight: 700;
+    background: rgba(0, 245, 155, 0.15);
+    color: var(--success);
+    border: 1px solid var(--success);
+    border-radius: var(--radius-sm);
+    margin-left: 0.35rem;
 }
 
 .live-net-ip-badge {
@@ -2326,14 +2340,30 @@ input.input-error:focus {
     color: var(--accent-cyan);
 }
 
-.live-net-title {
+.live-net-device-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.live-net-device-divider {
+    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+    padding-top: 0.85rem;
+    margin-top: 0.85rem;
+}
+
+.live-net-device-header {
     display: flex;
     align-items: center;
-    gap: 0.45rem;
+    justify-content: space-between;
+    margin-bottom: 0.55rem;
+}
+
+.live-net-device-num {
     font-family: var(--font-heading);
-    font-size: 0.88rem;
-    font-weight: 800;
-    color: var(--text-primary);
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    letter-spacing: 0.02em;
 }
 
 .live-net-pulse {
