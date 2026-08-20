@@ -1022,6 +1022,29 @@ body.modal-open {
     align-items: center;
 }
 
+.btn-preset {
+    background: #181b2a;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 4px 9px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-preset:hover {
+    background: #252a3d;
+    border-color: var(--primary);
+    color: #ffffff;
+}
+
+.btn-preset:active {
+    transform: translateY(1px);
+}
+
 .card-header {
     background: #10121d;
     border-bottom: var(--border-width) solid var(--border-dark);

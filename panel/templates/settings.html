@@ -144,6 +144,32 @@
                             </button>
                         </div>
                     </div>
+
+                    <div class="settings-row">
+                        <div class="settings-row-info">
+                            <div class="settings-row-label">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-yellow);">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                                <span class="settings-row-title">Session Expiration</span>
+                                <span class="settings-badge-yellow" id="sessionTimeoutBadge">{{ session_timeout }} mins ({{ session_timeout_formatted }})</span>
+                            </div>
+                            <div class="settings-row-desc">
+                                Configure the session expiration lifetime for administrator logins in minutes (Default: 4320 mins / 3 days).
+                            </div>
+                        </div>
+
+                        <div class="settings-row-action">
+                            <button type="button" class="btn btn-secondary" onclick="openSessionTimeoutModal()">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                                Change Timeout
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -298,6 +324,49 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" onclick="closePathModal()">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="btnPathSubmit">Update Path</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="sessionTimeoutModal" class="modal">
+        <div class="modal-content" style="max-width: 440px;">
+            <div class="modal-header">
+                <h3>Admin Session Timeout</h3>
+                <button class="btn-close" onclick="closeSessionTimeoutModal()">&times;</button>
+            </div>
+            <form id="changeSessionTimeoutForm" novalidate onsubmit="submitSessionTimeoutChange(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Expiration Lifetime (Minutes) <span style="color: var(--danger);">*</span></label>
+                        <input type="number" id="session_timeout_input" name="session_timeout" value="{{ session_timeout }}" min="1" max="43200" step="1" placeholder="4320" required autofocus oninput="updateTimeoutPreview(this.value)">
+                    </div>
+
+                    <div style="margin-top: -0.25rem; margin-bottom: 1rem;">
+                        <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.35rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">Quick Presets</label>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                            <button type="button" class="btn-preset" onclick="setPresetTimeout(30)">30 Mins</button>
+                            <button type="button" class="btn-preset" onclick="setPresetTimeout(60)">1 Hour</button>
+                            <button type="button" class="btn-preset" onclick="setPresetTimeout(720)">12 Hours</button>
+                            <button type="button" class="btn-preset" onclick="setPresetTimeout(1440)">1 Day</button>
+                            <button type="button" class="btn-preset" onclick="setPresetTimeout(4320)">3 Days (Default)</button>
+                            <button type="button" class="btn-preset" onclick="setPresetTimeout(10080)">7 Days</button>
+                            <button type="button" class="btn-preset" onclick="setPresetTimeout(43200)">30 Days (1 Month)</button>
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(255, 208, 0, 0.08); border: 1px solid rgba(255, 208, 0, 0.25); border-radius: 8px; padding: 10px 12px; font-size: 0.8rem; color: var(--accent-yellow);">
+                        <div style="font-weight: 600; margin-bottom: 3px;">
+                            Duration: <span id="timeoutPreviewText" style="color: #ffffff; font-family: var(--font-mono);">{{ session_timeout_formatted }}</span>
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4;">
+                            Allowed range: <strong>1 minute</strong> to <strong>43,200 minutes (1 month)</strong>.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeSessionTimeoutModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btnTimeoutSubmit">Update Timeout</button>
                 </div>
             </form>
         </div>
@@ -522,9 +591,28 @@
             clearAllErrors('#changePathForm');
         }
 
+        function openSessionTimeoutModal() {
+            clearFieldError(document.getElementById('session_timeout_input'));
+            document.getElementById('sessionTimeoutModal').style.display = 'flex';
+            document.body.classList.add('modal-open');
+            const input = document.getElementById('session_timeout_input');
+            updateTimeoutPreview(input.value);
+            setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 50);
+        }
+
+        function closeSessionTimeoutModal() {
+            document.getElementById('sessionTimeoutModal').style.display = 'none';
+            document.body.classList.remove('modal-open');
+            clearFieldError(document.getElementById('session_timeout_input'));
+        }
+
         window.onclick = function(event) {
             if (event.target == document.getElementById('credentialsModal')) closeCredentialsModal();
             if (event.target == document.getElementById('pathModal')) closePathModal();
+            if (event.target == document.getElementById('sessionTimeoutModal')) closeSessionTimeoutModal();
             if (event.target == document.getElementById('confirmVpnModal')) cancelVpnToggle();
             if (event.target == document.getElementById('restoreModal')) closeRestoreModal();
         }
@@ -864,6 +952,99 @@
                 btn.innerText = 'Update Path';
             }
         }
+
+        function setPresetTimeout(mins) {
+            const input = document.getElementById('session_timeout_input');
+            if (!input) return;
+            input.value = mins;
+            clearFieldError(input);
+            updateTimeoutPreview(mins);
+        }
+
+        function formatDurationJs(minutes) {
+            const mins = parseInt(minutes, 10);
+            if (isNaN(mins) || mins <= 0) return 'Invalid';
+            if (mins < 60) return `${mins} min${mins !== 1 ? 's' : ''}`;
+            if (mins % 1440 === 0) {
+                const days = mins / 1440;
+                return `${days} day${days !== 1 ? 's' : ''}`;
+            }
+            if (mins < 1440 && mins % 60 === 0) {
+                const hours = mins / 60;
+                return `${hours} hour${hours !== 1 ? 's' : ''}`;
+            }
+            const days = Math.floor(mins / 1440);
+            const rem = mins % 1440;
+            const hours = Math.floor(rem / 60);
+            const m = rem % 60;
+            let parts = [];
+            if (days > 0) parts.push(`${days}d`);
+            if (hours > 0) parts.push(`${hours}h`);
+            if (m > 0) parts.push(`${m}m`);
+            return parts.join(' ');
+        }
+
+        function updateTimeoutPreview(val) {
+            const textEl = document.getElementById('timeoutPreviewText');
+            if (!textEl) return;
+            const mins = parseInt(val, 10);
+            if (isNaN(mins) || mins < 1 || mins > 43200) {
+                textEl.textContent = 'Out of range (1 - 43200 mins)';
+                textEl.style.color = 'var(--danger)';
+            } else {
+                textEl.textContent = formatDurationJs(mins);
+                textEl.style.color = '#ffffff';
+            }
+        }
+
+        async function submitSessionTimeoutChange(e) {
+            e.preventDefault();
+            const input = document.getElementById('session_timeout_input');
+            clearFieldError(input);
+
+            const val = parseInt(input.value.trim(), 10);
+            if (isNaN(val) || val < 1 || val > 43200) {
+                showFieldError(input, 'Timeout must be between 1 and 43200 minutes');
+                input.focus();
+                return;
+            }
+
+            const btn = document.getElementById('btnTimeoutSubmit');
+            btn.disabled = true;
+            btn.innerText = 'Updating...';
+
+            const form = document.getElementById('changeSessionTimeoutForm');
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch(`${BASE_PATH}/settings/update-session-timeout`, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                });
+                const res = await response.json();
+
+                if (res.success) {
+                    closeSessionTimeoutModal();
+                    showToast(res.message || 'Session timeout updated successfully!', 'success', 3500);
+                    const badge = document.getElementById('sessionTimeoutBadge');
+                    if (badge) {
+                        badge.textContent = `${res.session_timeout} mins (${res.session_timeout_formatted})`;
+                    }
+                } else {
+                    showToast(res.error || 'Failed to update session timeout', 'error');
+                }
+            } catch (err) {
+                showToast('Connection error occurred while updating session timeout.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Update Timeout';
+            }
+        }
+
+        document.querySelectorAll('#changeSessionTimeoutForm input').forEach(input => {
+            input.addEventListener('input', () => clearFieldError(input));
+        });
 
         function fetchGitHubStars() {
             const starEl = document.getElementById('ghStarsCount');

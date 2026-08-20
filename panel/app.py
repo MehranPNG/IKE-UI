@@ -57,7 +57,7 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.5.2"
+APP_VERSION = "1.6.0"
 
 app = Flask(
     __name__,
@@ -75,9 +75,18 @@ app.wsgi_app = ProxyFix(
 )
 
 app.secret_key = get_persistent_secret_key()
-app.config["PERMANENT_SESSION_LIFETIME"] = datetime.timedelta(days=30)
+app.config["PERMANENT_SESSION_LIFETIME"] = datetime.timedelta(minutes=4320)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+@app.before_request
+def sync_session_lifetime():
+    try:
+        timeout_mins = int(get_system_config("admin_session_timeout", "4320"))
+        timeout_mins = max(1, min(43200, timeout_mins))
+    except (ValueError, TypeError):
+        timeout_mins = 4320
+    app.permanent_session_lifetime = datetime.timedelta(minutes=timeout_mins)
 
 shutdown_event = threading.Event()
 
@@ -92,12 +101,19 @@ except Exception:
 
 @app.context_processor
 def inject_globals():
+    try:
+        session_timeout = int(get_system_config("admin_session_timeout", "4320"))
+        session_timeout = max(1, min(43200, session_timeout))
+    except (ValueError, TypeError):
+        session_timeout = 4320
     return dict(
         app_version=APP_VERSION,
         current_admin=session.get("admin_user", ""),
         vpn_enabled=(get_system_config("vpn_enabled", "1") == "1"),
         base_path=request.script_root,
-        panel_path=get_system_config("panel_path", "")
+        panel_path=get_system_config("panel_path", ""),
+        session_timeout=session_timeout,
+        session_timeout_formatted=format_duration_minutes(session_timeout)
     )
 
 prev_cpu_times = None
@@ -249,6 +265,34 @@ def set_system_config(key, value):
         conn.close()
     except Exception as e:
         print(f"[!] Error setting config {key}: {e}", file=sys.stderr)
+
+def format_duration_minutes(minutes):
+    try:
+        mins = int(minutes)
+    except (ValueError, TypeError):
+        return f"{minutes} mins"
+    if mins <= 0:
+        return "0 mins"
+    if mins < 60:
+        return f"{mins} min" if mins == 1 else f"{mins} mins"
+    if mins % 1440 == 0:
+        days = mins // 1440
+        return f"{days} day" if days == 1 else f"{days} days"
+    if mins < 1440 and mins % 60 == 0:
+        hours = mins // 60
+        return f"{hours} hour" if hours == 1 else f"{hours} hours"
+    days = mins // 1440
+    rem = mins % 1440
+    hours = rem // 60
+    m = rem % 60
+    parts = []
+    if days > 0:
+        parts.append(f"{days}d")
+    if hours > 0:
+        parts.append(f"{hours}h")
+    if m > 0:
+        parts.append(f"{m}m")
+    return " ".join(parts)
 
 def init_db():
     try:
@@ -838,12 +882,56 @@ def start_accounting_daemon():
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.accept_mimetypes.best == "application/json"
+        admin_id = session.get("admin_id")
         admin_user = session.get("admin_user")
-        if not session.get("logged_in") or not admin_user:
-            is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.accept_mimetypes.best == "application/json"
+        auth_hash = session.get("auth_hash")
+        logged_in = session.get("logged_in")
+
+        if not logged_in or not admin_user or not auth_hash:
+            session.clear()
             if is_ajax:
                 return jsonify({"success": False, "error": "Unauthorized or session expired", "redirect": url_for("login")}), 401
             return redirect(url_for("login"))
+
+        try:
+            timeout_mins = int(get_system_config("admin_session_timeout", "4320"))
+            timeout_mins = max(1, min(43200, timeout_mins))
+        except (ValueError, TypeError):
+            timeout_mins = 4320
+
+        now = int(time.time())
+        last_active = session.get("last_active")
+        if last_active and (now - int(last_active)) > (timeout_mins * 60):
+            session.clear()
+            if is_ajax:
+                return jsonify({"success": False, "error": "Session expired due to inactivity", "redirect": url_for("login")}), 401
+            flash("Your session has expired. Please sign in again.", "warning")
+            return redirect(url_for("login"))
+
+        try:
+            conn = get_db()
+            cursor = conn.cursor()
+            if admin_id:
+                cursor.execute("SELECT id, username, password_hash FROM admin WHERE id = ?", (admin_id,))
+            else:
+                cursor.execute("SELECT id, username, password_hash FROM admin WHERE username = ?", (admin_user,))
+            admin = cursor.fetchone()
+            conn.close()
+
+            if not admin or admin["username"] != admin_user or admin["password_hash"] != auth_hash:
+                session.clear()
+                if is_ajax:
+                    return jsonify({"success": False, "error": "Admin credentials were changed. Please log in again.", "redirect": url_for("login")}), 401
+                flash("Admin credentials were changed. Please log in again.", "warning")
+                return redirect(url_for("login"))
+        except Exception:
+            session.clear()
+            if is_ajax:
+                return jsonify({"success": False, "error": "Session validation error", "redirect": url_for("login")}), 401
+            return redirect(url_for("login"))
+
+        session["last_active"] = now
         return f(*args, **kwargs)
     return decorated_function
 
@@ -939,7 +1027,39 @@ def get_remaining_days_filter(expire_date_str):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if session.get("logged_in") and session.get("admin_user"):
-        return redirect(url_for("dashboard"))
+        admin_id = session.get("admin_id")
+        admin_user = session.get("admin_user")
+        auth_hash = session.get("auth_hash")
+
+        valid = False
+        if auth_hash:
+            try:
+                timeout_mins = int(get_system_config("admin_session_timeout", "4320"))
+                timeout_mins = max(1, min(43200, timeout_mins))
+            except (ValueError, TypeError):
+                timeout_mins = 4320
+            now = int(time.time())
+            last_active = session.get("last_active")
+            if not last_active or (now - int(last_active)) <= (timeout_mins * 60):
+                try:
+                    conn = get_db()
+                    cursor = conn.cursor()
+                    if admin_id:
+                        cursor.execute("SELECT id, username, password_hash FROM admin WHERE id = ?", (admin_id,))
+                    else:
+                        cursor.execute("SELECT id, username, password_hash FROM admin WHERE username = ?", (admin_user,))
+                    admin = cursor.fetchone()
+                    conn.close()
+                    if admin and admin["username"] == admin_user and admin["password_hash"] == auth_hash:
+                        valid = True
+                except Exception:
+                    pass
+
+        if valid:
+            return redirect(url_for("dashboard"))
+        else:
+            session.clear()
+
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
@@ -956,6 +1076,9 @@ def login():
                 session["logged_in"] = True
                 session["admin_id"] = admin["id"]
                 session["admin_user"] = admin["username"]
+                session["auth_hash"] = admin["password_hash"]
+                session["last_active"] = int(time.time())
+                session["login_time"] = int(time.time())
                 return redirect(url_for("dashboard"))
             else:
                 flash("Invalid username or password!", "danger")
@@ -1133,12 +1256,25 @@ def dashboard():
 @app.route("/api/stream")
 @login_required
 def sse_stream():
+    stream_admin_id = session.get("admin_id")
+    stream_admin_user = session.get("admin_user")
+    stream_auth_hash = session.get("auth_hash")
+
     def event_generator():
         while not shutdown_event.is_set():
             try:
-                online = get_online_users()
                 conn = get_db()
                 cursor = conn.cursor()
+                if stream_admin_id:
+                    cursor.execute("SELECT id, username, password_hash FROM admin WHERE id = ?", (stream_admin_id,))
+                else:
+                    cursor.execute("SELECT id, username, password_hash FROM admin WHERE username = ?", (stream_admin_user,))
+                admin = cursor.fetchone()
+                if not admin or admin["username"] != stream_admin_user or admin["password_hash"] != stream_auth_hash:
+                    conn.close()
+                    break
+
+                online = get_online_users()
                 cursor.execute("SELECT * FROM users ORDER BY id DESC")
                 users = [dict(u) for u in cursor.fetchall()]
                 conn.close()
@@ -1569,7 +1705,51 @@ def settings():
 
     vpn_status = (get_system_config("vpn_enabled", "1") == "1")
     cur_path = get_system_config("panel_path", "")
-    return render_template("settings.html", vpn_enabled=vpn_status, panel_path=cur_path)
+    try:
+        session_timeout = int(get_system_config("admin_session_timeout", "4320"))
+        session_timeout = max(1, min(43200, session_timeout))
+    except (ValueError, TypeError):
+        session_timeout = 4320
+    session_timeout_formatted = format_duration_minutes(session_timeout)
+
+    return render_template(
+        "settings.html",
+        vpn_enabled=vpn_status,
+        panel_path=cur_path,
+        session_timeout=session_timeout,
+        session_timeout_formatted=session_timeout_formatted
+    )
+
+@app.route("/settings/update-session-timeout", methods=["POST"])
+@login_required
+def update_session_timeout():
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.accept_mimetypes.best == "application/json"
+    raw_timeout = request.form.get("session_timeout", "").strip()
+
+    try:
+        timeout_mins = int(raw_timeout)
+        if timeout_mins < 1 or timeout_mins > 43200:
+            raise ValueError("Timeout out of range (1 to 43200 minutes)")
+    except (ValueError, TypeError):
+        msg = "Session expiration duration must be an integer between 1 minute and 43200 minutes (1 month)."
+        if is_ajax:
+            return jsonify({"success": False, "error": msg}), 400
+        flash(msg, "danger")
+        return redirect(url_for("settings"))
+
+    set_system_config("admin_session_timeout", str(timeout_mins))
+    formatted_duration = format_duration_minutes(timeout_mins)
+    msg = f"Admin session expiration duration updated to {timeout_mins} minutes ({formatted_duration})."
+
+    if is_ajax:
+        return jsonify({
+            "success": True,
+            "message": msg,
+            "session_timeout": timeout_mins,
+            "session_timeout_formatted": formatted_duration
+        })
+    flash(msg, "success")
+    return redirect(url_for("settings"))
 
 @app.route("/settings/update-credentials", methods=["POST"])
 @login_required
