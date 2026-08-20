@@ -70,7 +70,6 @@
                 <div class="card-body">
                     <div class="settings-status-box">
                         <div class="settings-status-info">
-                            <div id="vpnStatusIndicatorDot" class="settings-indicator-dot" style="background: {% if vpn_enabled %}var(--success){% else %}var(--danger){% endif %};"></div>
                             <div class="settings-status-text">
                                 <div class="settings-status-title" id="vpnStatusTitle">
                                     {% if vpn_enabled %}Service Active & Accepting Connections{% else %}Service Disabled (Maintenance Mode){% endif %}
@@ -81,7 +80,8 @@
                             </div>
                         </div>
                         <span id="vpnStatusPill" class="status-pill {% if vpn_enabled %}status-active{% else %}status-disabled{% endif %}">
-                            {% if vpn_enabled %}Online{% else %}Stopped{% endif %}
+                            <span class="status-dot"></span>
+                            <span id="vpnStatusPillText">{% if vpn_enabled %}Online{% else %}Stopped{% endif %}</span>
                         </span>
                     </div>
                 </div>
@@ -468,17 +468,15 @@
         }
 
         function updateVpnUI(isEnabled) {
-            const dot = document.getElementById('vpnStatusIndicatorDot');
             const title = document.getElementById('vpnStatusTitle');
             const sub = document.getElementById('vpnStatusSub');
             const pill = document.getElementById('vpnStatusPill');
 
-            if (dot) dot.style.background = isEnabled ? 'var(--success)' : 'var(--danger)';
             if (title) title.innerText = isEnabled ? 'Service Active & Accepting Connections' : 'Service Disabled (Maintenance Mode)';
             if (sub) sub.innerText = isEnabled ? 'VPN clients can connect and authenticate normally.' : 'All client sessions are terminated and new connections are blocked.';
             if (pill) {
                 pill.className = 'status-pill ' + (isEnabled ? 'status-active' : 'status-disabled');
-                pill.innerText = isEnabled ? 'Online' : 'Stopped';
+                pill.innerHTML = `<span class="status-dot"></span><span id="vpnStatusPillText">${isEnabled ? 'Online' : 'Stopped'}</span>`;
             }
         }
 

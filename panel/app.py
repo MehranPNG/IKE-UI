@@ -57,7 +57,7 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.5.1"
+APP_VERSION = "1.5.2"
 
 app = Flask(
     __name__,
@@ -343,6 +343,7 @@ def disconnect_all_sas():
                 if sa_id:
                     subprocess.run(["ipsec", "down", f"ikev2-vpn[{sa_id}]"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     subprocess.run(["ipsec", "down", str(sa_id)], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        invalidate_online_cache()
     except Exception as e:
         print(f"[!] Error disconnecting all SAs: {e}", file=sys.stderr)
 
@@ -359,6 +360,7 @@ def disconnect_user_sas(username, online_dict=None):
                 if sa_id:
                     subprocess.run(["ipsec", "down", f"ikev2-vpn[{sa_id}]"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     subprocess.run(["ipsec", "down", str(sa_id)], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            invalidate_online_cache()
     except Exception as e:
         print(f"[!] Error disconnecting SAs for {username}: {e}", file=sys.stderr)
 
@@ -384,6 +386,7 @@ def disconnect_excess_sas(username, max_devices, online_dict=None):
                     if sa_id:
                         subprocess.run(["ipsec", "down", f"ikev2-vpn[{sa_id}]"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                         subprocess.run(["ipsec", "down", str(sa_id)], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                invalidate_online_cache()
     except Exception as e:
         print(f"[!] Error disconnecting excess SAs for {username}: {e}", file=sys.stderr)
 
@@ -442,6 +445,38 @@ def sync_ipsec_secrets():
 
 user_live_speeds = {}
 user_speed_lock = threading.Lock()
+sa_live_speeds = {}
+sa_speed_lock = threading.Lock()
+
+def update_sa_live_speed(sa_id, total_in, total_out):
+    now_t = time.time()
+    with sa_speed_lock:
+        prev = sa_live_speeds.get(sa_id)
+        if prev:
+            dt = max(0.5, now_t - prev['last_time'])
+            delta_in = max(0, total_in - prev['last_in'])
+            delta_out = max(0, total_out - prev['last_out'])
+            up_rate = delta_in / dt     # server RX = client upload
+            down_rate = delta_out / dt  # server TX = client download
+            sa_live_speeds[sa_id] = {
+                'speed_down': format_speed(down_rate),
+                'speed_up': format_speed(up_rate),
+                'down_rate': down_rate,
+                'up_rate': up_rate,
+                'last_in': total_in,
+                'last_out': total_out,
+                'last_time': now_t
+            }
+        else:
+            sa_live_speeds[sa_id] = {
+                'speed_down': '0 B/s',
+                'speed_up': '0 B/s',
+                'down_rate': 0,
+                'up_rate': 0,
+                'last_in': total_in,
+                'last_out': total_out,
+                'last_time': now_t
+            }
 
 def update_user_live_speed(username, total_in, total_out):
     now_t = time.time()
@@ -451,13 +486,15 @@ def update_user_live_speed(username, total_in, total_out):
             dt = max(0.5, now_t - prev['last_time'])
             delta_in = max(0, total_in - prev['last_in'])
             delta_out = max(0, total_out - prev['last_out'])
-            rx_rate = delta_in / dt
-            tx_rate = delta_out / dt
+            up_rate = delta_in / dt     # server RX = client upload
+            down_rate = delta_out / dt  # server TX = client download
             user_live_speeds[username] = {
-                'net_rx': format_speed(rx_rate),
-                'net_tx': format_speed(tx_rate),
-                'rx_rate': rx_rate,
-                'tx_rate': tx_rate,
+                'net_rx': format_speed(down_rate), # client download speed
+                'net_tx': format_speed(up_rate),   # client upload speed
+                'speed_down': format_speed(down_rate),
+                'speed_up': format_speed(up_rate),
+                'down_rate': down_rate,
+                'up_rate': up_rate,
                 'last_in': total_in,
                 'last_out': total_out,
                 'last_time': now_t
@@ -466,8 +503,10 @@ def update_user_live_speed(username, total_in, total_out):
             user_live_speeds[username] = {
                 'net_rx': '0 B/s',
                 'net_tx': '0 B/s',
-                'rx_rate': 0,
-                'tx_rate': 0,
+                'speed_down': '0 B/s',
+                'speed_up': '0 B/s',
+                'down_rate': 0,
+                'up_rate': 0,
                 'last_in': total_in,
                 'last_out': total_out,
                 'last_time': now_t
@@ -476,6 +515,12 @@ def update_user_live_speed(username, total_in, total_out):
 cached_online_users = {}
 cached_online_time = 0
 online_cache_lock = threading.Lock()
+
+def invalidate_online_cache():
+    global cached_online_time, cached_online_users
+    with online_cache_lock:
+        cached_online_time = 0
+        cached_online_users = {}
 
 def fetch_online_users_raw():
     online = {}
@@ -644,6 +689,8 @@ def fetch_online_users_raw():
 
         for uname, udata in online.items():
             update_user_live_speed(uname, udata.get("bytes_in", 0), udata.get("bytes_out", 0))
+            for sa_id, s_info in udata.get("sas", {}).items():
+                update_sa_live_speed(sa_id, s_info.get("bytes_in", 0), s_info.get("bytes_out", 0))
 
     except Exception as e:
         print(f"[!] Error parsing ipsec statusall: {e}", file=sys.stderr)
@@ -924,26 +971,34 @@ def logout():
 
 def format_user_payload(u, online):
     uname = u.get("username") if isinstance(u, dict) else u["username"]
-    is_on = uname in online
-    online_info = online.get(uname, {})
-    dev_cnt = online_info.get("device_count", 1) if is_on else 0
-    last_seen_raw = u.get("last_online_at") if isinstance(u, dict) else u["last_online_at"]
-    last_seen_formatted = format_last_online_str(last_seen_raw)
-    created_at_raw = u.get("created_at") if isinstance(u, dict) else (u["created_at"] if "created_at" in u.keys() else "")
-    used_bytes = (u.get("used_traffic_bytes") if isinstance(u, dict) else u["used_traffic_bytes"]) or 0
-    max_gb = (u.get("max_traffic_gb") if isinstance(u, dict) else u["max_traffic_gb"]) or 0
-    exp_date = (u.get("expire_date") if isinstance(u, dict) else u["expire_date"]) or ""
     is_act = u.get("is_active") if isinstance(u, dict) else u["is_active"]
     is_act = 1 if is_act is None else int(is_act)
-    note = (u.get("note") if isinstance(u, dict) else u["note"]) or ""
-    u_id = u.get("id") if isinstance(u, dict) else u["id"]
-    u_pwd = u.get("password") if isinstance(u, dict) else u["password"]
+
     raw_max_dev = u.get("max_devices") if isinstance(u, dict) else u["max_devices"]
     try:
         max_dev = int(raw_max_dev) if raw_max_dev is not None else 10
         max_dev = max(1, min(10, max_dev))
     except (ValueError, TypeError):
         max_dev = 10
+
+    online_info = online.get(uname, {}) if is_act == 1 else {}
+    is_on = (is_act == 1) and (uname in online)
+
+    if is_on:
+        raw_dev_cnt = online_info.get("device_count", 1)
+        dev_cnt = max(1, min(raw_dev_cnt, max_dev))
+    else:
+        dev_cnt = 0
+
+    last_seen_raw = u.get("last_online_at") if isinstance(u, dict) else u["last_online_at"]
+    last_seen_formatted = format_last_online_str(last_seen_raw)
+    created_at_raw = u.get("created_at") if isinstance(u, dict) else (u["created_at"] if "created_at" in u.keys() else "")
+    used_bytes = (u.get("used_traffic_bytes") if isinstance(u, dict) else u["used_traffic_bytes"]) or 0
+    max_gb = (u.get("max_traffic_gb") if isinstance(u, dict) else u["max_traffic_gb"]) or 0
+    exp_date = (u.get("expire_date") if isinstance(u, dict) else u["expire_date"]) or ""
+    note = (u.get("note") if isinstance(u, dict) else u["note"]) or ""
+    u_id = u.get("id") if isinstance(u, dict) else u["id"]
+    u_pwd = u.get("password") if isinstance(u, dict) else u["password"]
 
     saved_last_ip = u.get("last_ip") if isinstance(u, dict) else (u["last_ip"] if "last_ip" in u.keys() else "")
     last_ip_val = saved_last_ip or ""
@@ -956,20 +1011,49 @@ def format_user_payload(u, online):
     if is_on:
         with user_speed_lock:
             spd = user_live_speeds.get(uname, {})
-            rx_spd = spd.get('net_rx', '0 B/s')
-            tx_spd = spd.get('net_tx', '0 B/s')
+            down_spd = spd.get('speed_down', spd.get('net_rx', '0 B/s'))
+            up_spd = spd.get('speed_up', spd.get('net_tx', '0 B/s'))
 
-        bytes_in = online_info.get("bytes_in", 0)
-        bytes_out = online_info.get("bytes_out", 0)
+        bytes_in = online_info.get("bytes_in", 0)   # client upload
+        bytes_out = online_info.get("bytes_out", 0) # client download
+
+        devices = []
+        sas_dict = online_info.get("sas", {})
+        if sas_dict:
+            for sa_id, sa_item in sas_dict.items():
+                with sa_speed_lock:
+                    s_spd = sa_live_speeds.get(sa_id, {})
+                    d_down = s_spd.get('speed_down', '0 B/s')
+                    d_up = s_spd.get('speed_up', '0 B/s')
+
+                d_in = sa_item.get("bytes_in", 0)   # client upload
+                d_out = sa_item.get("bytes_out", 0) # client download
+                devices.append({
+                    "sa_id": sa_id,
+                    "client_ip": sa_item.get("client_ip", "") or online_info.get("client_ip", ""),
+                    "vip": sa_item.get("vip", ""),
+                    "established": sa_item.get("established", "") or "Active",
+                    "speed_down": d_down,
+                    "speed_up": d_up,
+                    "bytes_down": format_bytes_val(d_out),
+                    "bytes_up": format_bytes_val(d_in),
+                    "bytes_total": format_bytes_val(d_in + d_out)
+                })
+
         live_net = {
-            "net_rx": rx_spd,
-            "net_tx": tx_spd,
+            "speed_down": down_spd,
+            "speed_up": up_spd,
+            "net_rx": down_spd,
+            "net_tx": up_spd,
+            "bytes_down": format_bytes_val(bytes_out),
+            "bytes_up": format_bytes_val(bytes_in),
             "bytes_in": format_bytes_val(bytes_in),
             "bytes_out": format_bytes_val(bytes_out),
             "bytes_total": format_bytes_val(bytes_in + bytes_out),
             "vip": (online_info.get("vips") or [""])[0],
             "client_ip": online_info.get("client_ip", ""),
-            "established": online_info.get("established", "")
+            "established": online_info.get("established", ""),
+            "devices": devices
         }
 
     return {
@@ -1030,7 +1114,7 @@ def dashboard():
 
     total_users = len(users)
     active_users = sum(1 for u in users if (u["is_active"] or 0) == 1)
-    online_count = sum(1 for u in users if u["username"] in online)
+    online_count = sum(1 for u in users if (u["is_active"] or 0) == 1 and u["username"] in online)
     total_traffic_bytes = sum((u["used_traffic_bytes"] or 0) for u in users)
     sys_metrics = get_system_metrics()
     users_formatted = [format_user_payload(u, online) for u in users]
@@ -1061,7 +1145,7 @@ def sse_stream():
 
                 total_users = len(users)
                 active_users = sum(1 for u in users if (u.get("is_active") or 0) == 1)
-                online_count = sum(1 for u in users if u["username"] in online)
+                online_count = sum(1 for u in users if (u.get("is_active") or 0) == 1 and u["username"] in online)
                 total_traffic_bytes = sum((u.get("used_traffic_bytes") or 0) for u in users)
                 sys_metrics = get_system_metrics()
 
@@ -1324,6 +1408,7 @@ def toggle_user(user_id):
 
         if new_state == 0:
             disconnect_user_sas(user["username"])
+        invalidate_online_cache()
 
         status_str = "Enabled" if new_state == 1 else "Disabled"
         if is_ajax:

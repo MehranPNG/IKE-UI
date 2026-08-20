@@ -2,7 +2,7 @@
 set -e
 
 REPO_URL="https://github.com/MehranPNG/IKE-UI.git"
-APP_VERSION="1.5.1"
+APP_VERSION="1.5.2"
 INSTALL_DIR="/opt/ike-ui"
 PANEL_DIR="${INSTALL_DIR}/panel"
 DB_DIR="/etc/strongswan-panel"
@@ -289,6 +289,13 @@ CLI_EOF
     ln -sf "$BIN_PATH" "$ALT_BIN_PATH" 2>/dev/null || true
 }
 
+is_installed() {
+    if [ -f /etc/systemd/system/ike-ui.service ] || [ -f "${DB_PATH}" ] || [ -f "${PANEL_DIR}/app.py" ]; then
+        return 0
+    fi
+    return 1
+}
+
 bootstrap_environment() {
     SCRIPT_SOURCE="${BASH_SOURCE[0]}"
     if [ -f "$SCRIPT_SOURCE" ]; then
@@ -299,8 +306,19 @@ bootstrap_environment() {
 
     if [ "$CURRENT_DIR" != "$INSTALL_DIR" ]; then
         check_root
-        show_banner
         check_os
+
+        local is_first_install=0
+        if ! is_installed; then
+            is_first_install=1
+            read -rp "Do you want to install IKE-UI panel? [y/n]: " confirm_install
+            if [[ ! "$confirm_install" =~ ^[yY]([eE][sS])?$ ]]; then
+                echo -e "${YELLOW}[*] Installation cancelled.${NC}"
+                exit 0
+            fi
+        else
+            show_banner
+        fi
 
         echo -e "${CYAN}[*] Installing base dependencies (git, curl, ca-certificates)...${NC}"
         export DEBIAN_FRONTEND=noninteractive
@@ -327,7 +345,12 @@ bootstrap_environment() {
 
         echo -e "${GREEN}[+] Initialization complete.${NC}"
         echo ""
-        exec "${INSTALL_DIR}/install.sh" "$@"
+
+        if [ "$is_first_install" -eq 1 ] && [ -z "$1" ]; then
+            exec "${INSTALL_DIR}/install.sh" --first-install
+        else
+            exec "${INSTALL_DIR}/install.sh" "$@"
+        fi
     fi
 }
 
@@ -1513,15 +1536,15 @@ show_help() {
     echo ""
     echo -e "Commands:"
     echo -e "  ${CYAN}(no arg)${NC}            Open interactive management menu"
-    echo -e "  ${CYAN}install, -i${NC}         Full installation and deployment"
-    echo -e "  ${CYAN}update, -u${NC} [1|2]    Update IKE-UI (1: Tagged Release, 2: Dev Commit)"
+    echo -e "  ${CYAN}install, -i${NC}         Install Panel / Reinstall"
+    echo -e "  ${CYAN}update, -u${NC} [1|2]    Update IKE-UI"
     echo -e "  ${CYAN}restart, -r${NC}         Restart all services (StrongSwan, Panel, Nginx)"
     echo -e "  ${CYAN}start${NC}               Start all services"
     echo -e "  ${CYAN}stop${NC}                Stop all services"
     echo -e "  ${CYAN}status, -s${NC}          Check service status and active VPN connections"
     echo -e "  ${CYAN}logs, -l${NC}            View live service logs"
-    echo -e "  ${CYAN}access, -a, -p${NC}      Manage admin credentials, secret path, and web port"
-    echo -e "  ${CYAN}domain, -d, ssl${NC}     Manage domain migration and renew SSL certificates"
+    echo -e "  ${CYAN}access, -a, -p${NC}      Panel Access & Admin Settings"
+    echo -e "  ${CYAN}domain, -d, ssl${NC}     Domain & SSL Management"
     echo -e "  ${CYAN}uninstall${NC}           Uninstall IKE-UI and clean up"
     echo -e "  ${CYAN}version, -v${NC}         Show current installed version"
     echo -e "  ${CYAN}help, -h${NC}            Show this help message"
@@ -1532,15 +1555,15 @@ menu() {
     while true; do
         show_banner
         echo -e "${BOLD}Select an action:${NC}"
-        echo -e "  ${CYAN}1)${NC}  Full Install / Re-deploy"
-        echo -e "  ${CYAN}2)${NC}  Update IKE-UI (1: Tagged Release, 2: Dev Commit)"
+        echo -e "  ${CYAN}1)${NC}  Install Panel / Reinstall"
+        echo -e "  ${CYAN}2)${NC}  Update IKE-UI"
         echo -e "  ${CYAN}3)${NC}  Restart All Services (StrongSwan, Panel, Nginx)"
         echo -e "  ${CYAN}4)${NC}  Stop All Services"
         echo -e "  ${CYAN}5)${NC}  Start All Services"
         echo -e "  ${CYAN}6)${NC}  Check Status & Active VPN Connections"
         echo -e "  ${CYAN}7)${NC}  View Live Logs"
-        echo -e "  ${CYAN}8)${NC}  Panel Access & Admin Settings (User/Pass, Path, Port)"
-        echo -e "  ${CYAN}9)${NC}  Domain & SSL Management (Renew SSL, Change Domain)"
+        echo -e "  ${CYAN}8)${NC}  Panel Access & Admin Settings"
+        echo -e "  ${CYAN}9)${NC}  Domain & SSL Management"
         echo -e "  ${CYAN}10)${NC} Uninstall IKE-UI"
         echo -e "  ${CYAN}0)${NC}  Exit"
         echo ""
@@ -1599,6 +1622,12 @@ bootstrap_environment "$@"
 check_root
 
 case "$1" in
+    --first-install)
+        install_all
+        echo ""
+        read -rp "Press Enter to continue..."
+        menu
+        ;;
     install|-i|--install)
         install_all "$2"
         ;;
@@ -1630,7 +1659,19 @@ case "$1" in
         uninstall_all
         ;;
     "")
-        menu
+        if ! is_installed; then
+            read -rp "Do you want to install IKE-UI panel? [y/n]: " confirm_install
+            if [[ ! "$confirm_install" =~ ^[yY]([eE][sS])?$ ]]; then
+                echo -e "${YELLOW}[*] Installation cancelled.${NC}"
+                exit 0
+            fi
+            install_all
+            echo ""
+            read -rp "Press Enter to continue..."
+            menu
+        else
+            menu
+        fi
         ;;
     *)
         echo -e "${RED}Unknown command: $1${NC}"

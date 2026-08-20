@@ -122,11 +122,10 @@ body.modal-open {
 .service-stopped-badge {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    font-family: var(--font-heading);
-    font-size: 0.72rem;
-    font-weight: 700;
-    padding: 0.18rem 0.55rem;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
     background: rgba(255, 71, 87, 0.15);
     color: var(--danger);
     border: 1.5px solid var(--danger);
@@ -136,11 +135,12 @@ body.modal-open {
     line-height: 1;
     transition: all 0.12s ease;
     user-select: none;
-    animation: alertPulse 2.2s infinite ease-in-out;
+    flex-shrink: 0;
+    vertical-align: middle;
 }
 
 .service-stopped-badge:hover {
-    background: rgba(255, 71, 87, 0.25);
+    background: rgba(255, 71, 87, 0.3);
     transform: translate(-1px, -1px);
     box-shadow: 2px 2px 0px #000000;
 }
@@ -148,11 +148,6 @@ body.modal-open {
 .service-stopped-badge:active {
     transform: translate(1px, 1px);
     box-shadow: none;
-}
-
-@keyframes alertPulse {
-    0%, 100% { opacity: 1; border-color: var(--danger); }
-    50% { opacity: 0.7; border-color: #ff8591; }
 }
 
 .nav-actions {
@@ -778,8 +773,8 @@ body.modal-open {
 }
 
 .badge-pulse {
-    width: 9px;
-    height: 9px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     background: #00f59b;
     border: 1.5px solid var(--border-dark);
@@ -1200,7 +1195,9 @@ body.modal-open {
 }
 
 .status-pill {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
     padding: 3px 8px;
     border-radius: var(--radius-sm);
     border: 1.5px solid var(--border-dark);
@@ -1208,6 +1205,16 @@ body.modal-open {
     font-size: 0.75rem;
     font-weight: 700;
     box-shadow: 1.5px 1.5px 0px #000000;
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    border: 1px solid rgba(0, 0, 0, 0.4);
+    display: inline-block;
+    flex-shrink: 0;
 }
 
 .status-active {
@@ -2266,6 +2273,13 @@ input.input-error:focus {
     padding: 1.15rem 1.35rem;
 }
 
+.user-live-net-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    margin-bottom: 0;
+}
+
 .user-live-net-card {
     background: var(--bg-surface);
     border: var(--border-width) solid var(--border-dark);
@@ -2274,13 +2288,42 @@ input.input-error:focus {
     box-shadow: var(--shadow-sm);
 }
 
+.user-live-net-card-multi {
+    border-left: 3.5px solid var(--accent-cyan);
+}
+
 .live-net-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 0.5rem;
     margin-bottom: 0.75rem;
     padding-bottom: 0.5rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.live-net-ip-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.55rem;
+    background: #111422;
+    border: 1.5px solid var(--border-dark);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    box-shadow: 1px 1px 0px #000000;
+}
+
+.live-net-ip-label {
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+}
+
+.live-net-ip-val {
+    color: var(--accent-cyan);
 }
 
 .live-net-title {
