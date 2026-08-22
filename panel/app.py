@@ -93,7 +93,7 @@ limiter = Limiter(
 @app.errorhandler(RateLimitExceeded)
 def ratelimit_handler(e):
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json or request.accept_mimetypes.best == "application/json"
-    msg = "بیش از حد امتحان کردید، بعداً سعی کنید"
+    msg = "Too many login attempts. Please try again later."
     if is_ajax:
         return jsonify({"success": False, "error": msg}), 429
     flash(msg, "danger")
@@ -520,8 +520,8 @@ def update_sa_live_speed(sa_id, total_in, total_out):
             dt = max(0.5, now_t - prev['last_time'])
             delta_in = max(0, total_in - prev['last_in'])
             delta_out = max(0, total_out - prev['last_out'])
-            up_rate = delta_in / dt     # server RX = client upload
-            down_rate = delta_out / dt  # server TX = client download
+            up_rate = delta_in / dt
+            down_rate = delta_out / dt
             sa_live_speeds[sa_id] = {
                 'speed_down': format_speed(down_rate),
                 'speed_up': format_speed(up_rate),
@@ -550,11 +550,11 @@ def update_user_live_speed(username, total_in, total_out):
             dt = max(0.5, now_t - prev['last_time'])
             delta_in = max(0, total_in - prev['last_in'])
             delta_out = max(0, total_out - prev['last_out'])
-            up_rate = delta_in / dt     # server RX = client upload
-            down_rate = delta_out / dt  # server TX = client download
+            up_rate = delta_in / dt
+            down_rate = delta_out / dt
             user_live_speeds[username] = {
-                'net_rx': format_speed(down_rate), # client download speed
-                'net_tx': format_speed(up_rate),   # client upload speed
+                'net_rx': format_speed(down_rate),
+                'net_tx': format_speed(up_rate),
                 'speed_down': format_speed(down_rate),
                 'speed_up': format_speed(up_rate),
                 'down_rate': down_rate,
@@ -1165,8 +1165,8 @@ def format_user_payload(u, online):
             down_spd = spd.get('speed_down', spd.get('net_rx', '0 B/s'))
             up_spd = spd.get('speed_up', spd.get('net_tx', '0 B/s'))
 
-        bytes_in = online_info.get("bytes_in", 0)   # client upload
-        bytes_out = online_info.get("bytes_out", 0) # client download
+        bytes_in = online_info.get("bytes_in", 0)
+        bytes_out = online_info.get("bytes_out", 0)
 
         devices = []
         sas_dict = online_info.get("sas", {})
@@ -1177,8 +1177,8 @@ def format_user_payload(u, online):
                     d_down = s_spd.get('speed_down', '0 B/s')
                     d_up = s_spd.get('speed_up', '0 B/s')
 
-                d_in = sa_item.get("bytes_in", 0)   # client upload
-                d_out = sa_item.get("bytes_out", 0) # client download
+                d_in = sa_item.get("bytes_in", 0)
+                d_out = sa_item.get("bytes_out", 0)
                 devices.append({
                     "sa_id": sa_id,
                     "client_ip": sa_item.get("client_ip", "") or online_info.get("client_ip", ""),

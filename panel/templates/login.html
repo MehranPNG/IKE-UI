@@ -89,7 +89,7 @@
 
                 if (response.status === 429) {
                     const data = await response.json().catch(() => ({}));
-                    const errMsg = data.error || 'بیش از حد امتحان کردید، بعداً سعی کنید';
+                    const errMsg = data.error || 'Too many login attempts. Please try again later.';
                     alertBox.innerHTML = `<div class="alert alert-danger">${errMsg}</div>`;
                     return false;
                 }
