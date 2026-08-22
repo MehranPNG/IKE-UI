@@ -17,15 +17,17 @@
             <p>Enter administrator credentials to access the panel</p>
         </div>
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+        <div id="loginAlertBox">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
 
-        <form method="POST" action="{{ url_for('login') }}" class="login-form" id="loginForm" novalidate onsubmit="return validateLoginForm(event)">
+        <form method="POST" action="{{ url_for('login') }}" class="login-form" id="loginForm" novalidate onsubmit="return handleLoginSubmit(event)">
             <div class="form-group">
                 <label for="username">Username</label>
                 <input type="text" id="username" name="username" placeholder="admin" autofocus autocomplete="username">
@@ -58,12 +60,62 @@
             }
 
             if (!valid) {
-                e.preventDefault();
+                if (e) e.preventDefault();
                 const firstErr = document.querySelector('.input-error');
                 if (firstErr) firstErr.focus();
                 return false;
             }
             return true;
+        }
+
+        async function handleLoginSubmit(e) {
+            e.preventDefault();
+            if (!validateLoginForm(e)) return false;
+
+            const form = document.getElementById('loginForm');
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const alertBox = document.getElementById('loginAlertBox');
+            const formData = new FormData(form);
+
+            submitBtn.disabled = true;
+            submitBtn.innerText = 'Signing In...';
+
+            try {
+                const response = await fetch("{{ url_for('login') }}", {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                });
+
+                if (response.status === 429) {
+                    const data = await response.json().catch(() => ({}));
+                    const errMsg = data.error || 'بیش از حد امتحان کردید، بعداً سعی کنید';
+                    alertBox.innerHTML = `<div class="alert alert-danger">${errMsg}</div>`;
+                    return false;
+                }
+
+                if (response.redirected) {
+                    window.location.href = response.url;
+                    return false;
+                }
+
+                const res = await response.json().catch(() => null);
+                if (res && res.success) {
+                    window.location.href = res.redirect || "{{ url_for('dashboard') }}";
+                } else if (res && res.error) {
+                    alertBox.innerHTML = `<div class="alert alert-danger">${res.error}</div>`;
+                } else if (response.status === 401) {
+                    alertBox.innerHTML = `<div class="alert alert-danger">Invalid username or password!</div>`;
+                } else {
+                    form.submit();
+                }
+            } catch (err) {
+                form.submit();
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = 'Sign In';
+            }
+            return false;
         }
 
         function showFieldError(input, msg) {

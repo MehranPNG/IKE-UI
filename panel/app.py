@@ -18,6 +18,9 @@ from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response, stream_with_context, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_limiter.errors import RateLimitExceeded
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get("DB_PATH", "/etc/strongswan-panel/panel.db")
@@ -57,7 +60,7 @@ def get_persistent_secret_key():
             continue
     return new_key
 
-APP_VERSION = "1.6.0"
+APP_VERSION = "1.6.1"
 
 app = Flask(
     __name__,
@@ -78,6 +81,23 @@ app.secret_key = get_persistent_secret_key()
 app.config["PERMANENT_SESSION_LIFETIME"] = datetime.timedelta(minutes=4320)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri="memory://"
+)
+
+@app.errorhandler(429)
+@app.errorhandler(RateLimitExceeded)
+def ratelimit_handler(e):
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json or request.accept_mimetypes.best == "application/json"
+    msg = "بیش از حد امتحان کردید، بعداً سعی کنید"
+    if is_ajax:
+        return jsonify({"success": False, "error": msg}), 429
+    flash(msg, "danger")
+    return render_template("login.html"), 429
 
 @app.before_request
 def sync_session_lifetime():
@@ -1025,6 +1045,7 @@ def get_remaining_days_filter(expire_date_str):
     return calc_remaining_days(expire_date_str)
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("1/second; 10/minute")
 def login():
     if session.get("logged_in") and session.get("admin_user"):
         admin_id = session.get("admin_id")
@@ -1061,6 +1082,7 @@ def login():
             session.clear()
 
     if request.method == "POST":
+        is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json or request.accept_mimetypes.best == "application/json"
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
 
@@ -1079,10 +1101,16 @@ def login():
                 session["auth_hash"] = admin["password_hash"]
                 session["last_active"] = int(time.time())
                 session["login_time"] = int(time.time())
+                if is_ajax:
+                    return jsonify({"success": True, "redirect": url_for("dashboard")})
                 return redirect(url_for("dashboard"))
             else:
+                if is_ajax:
+                    return jsonify({"success": False, "error": "Invalid username or password!"}), 401
                 flash("Invalid username or password!", "danger")
         except Exception as e:
+            if is_ajax:
+                return jsonify({"success": False, "error": f"Login error: {e}"}), 500
             flash(f"Login error: {e}", "danger")
 
     return render_template("login.html")
@@ -1583,6 +1611,11 @@ def delete_user(user_id):
         conn.close()
     return redirect(url_for("dashboard"))
 
+RESERVED_PANEL_PATHS = {
+    "login", "logout", "settings", "user", "admin",
+    "api", "backup", "restore", "static", "sub", "subscription"
+}
+
 def update_nginx_panel_path(new_path):
     try:
         domain = get_system_config("server_domain", SERVER_DOMAIN)
@@ -1607,6 +1640,9 @@ def update_nginx_panel_path(new_path):
             clean_path = ""
         else:
             clean_path = re.sub(r'[^a-zA-Z0-9_-]', '', clean_path)
+
+        if clean_path and clean_path.lower() in RESERVED_PANEL_PATHS:
+            return False, f"Path '/{clean_path}' is a reserved system path and cannot be used."
 
         redirect_port = f":{port}" if str(port) != "443" else ""
 

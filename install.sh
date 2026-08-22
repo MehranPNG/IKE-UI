@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
-REPO_URL="https://github.com/MehranPNG/IKE-UI.git"
-APP_VERSION="1.6.0"
+REPO_URL="https://github.com/mehranpng/IKE-UI.git"
+APP_VERSION="1.6.1"
 INSTALL_DIR="/opt/ike-ui"
 PANEL_DIR="${INSTALL_DIR}/panel"
 DB_DIR="/etc/strongswan-panel"
@@ -20,6 +20,19 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
+
+is_reserved_path() {
+    local p
+    p=$(echo "$1" | sed -e 's|^/*||' -e 's|/*$||' | tr '[:upper:]' '[:lower:]')
+    case "$p" in
+        login|logout|settings|user|admin|api|backup|restore|static|sub|subscription)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
 
 generate_rand_user() {
     tr -dc 'a-z' < /dev/urandom 2>/dev/null | head -c 8 || python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_lowercase) for _ in range(8)))"
@@ -199,7 +212,7 @@ show_banner() {
         disk_ver=$(grep -oP '^APP_VERSION=["\x27]?\K[^"\x27\s]+' "${INSTALL_DIR}/install.sh" 2>/dev/null || true)
         if [ -n "$disk_ver" ]; then
             cur_ver="$disk_ver"
-            APP_VERSION="1.6.0"
+            APP_VERSION="1.6.1"
         fi
     fi
     echo -e "${PURPLE}${BOLD}"
@@ -440,14 +453,22 @@ install_all() {
     done
 
     echo ""
-    local rand_path
-    rand_path=$(generate_rand_path)
-    read -rp "Enter Panel Secret Path [default: random 16-chars (${rand_path})]: " PANEL_PATH
-    PANEL_PATH=${PANEL_PATH:-$rand_path}
-    PANEL_PATH=$(echo "$PANEL_PATH" | sed -e 's|^/*||' -e 's|/*$||' | tr -cd 'a-zA-Z0-9_-')
-    if [ -z "$PANEL_PATH" ]; then
-        PANEL_PATH="$rand_path"
-    fi
+    while true; do
+        local rand_path
+        rand_path=$(generate_rand_path)
+        read -rp "Enter Panel Secret Path [default: random 16-chars (${rand_path})]: " PANEL_PATH
+        PANEL_PATH=${PANEL_PATH:-$rand_path}
+        PANEL_PATH=$(echo "$PANEL_PATH" | sed -e 's|^/*||' -e 's|/*$||' | tr -cd 'a-zA-Z0-9_-')
+        if [ -z "$PANEL_PATH" ]; then
+            PANEL_PATH="$rand_path"
+        fi
+        if is_reserved_path "$PANEL_PATH"; then
+            echo -e "${RED}[X] Error: '/${PANEL_PATH}' is a reserved system path and cannot be used as secret path.${NC}"
+            echo -e "${YELLOW}[!] Reserved paths: login, logout, settings, user, admin, api, backup, restore, static, sub, subscription.${NC}"
+        else
+            break
+        fi
+    done
 
     echo ""
     local rand_user
@@ -967,7 +988,7 @@ RENEW_EOF
         new_ver=$(grep -oP '^APP_VERSION\s*=\s*["\x27]?\K[^"\x27\s]+' "${INSTALL_DIR}/panel/app.py" 2>/dev/null || true)
     fi
     if [ -n "$new_ver" ]; then
-        APP_VERSION="1.6.0"
+        APP_VERSION="1.6.1"
     fi
 
     if systemctl is-active --quiet ike-ui.service; then
@@ -1113,18 +1134,27 @@ change_panel_path() {
     echo -e "  ${BOLD}Current Panel URL:${NC} ${CYAN}https://${cur_domain}${port_str}${path_str}${NC}"
     echo ""
 
-    local rand_path
-    rand_path=$(generate_rand_path)
-    read -rp "Enter new Secret Path [default: random 16-chars (${rand_path}), or '/' for root]: " NEW_PATH
-    NEW_PATH=${NEW_PATH:-$rand_path}
-    if [[ "$NEW_PATH" == "/" || "$NEW_PATH" == "root" ]]; then
-        NEW_PATH=""
-    else
-        NEW_PATH=$(echo "$NEW_PATH" | sed -e 's|^/*||' -e 's|/*$||' | tr -cd 'a-zA-Z0-9_-')
-        if [ -z "$NEW_PATH" ]; then
-            NEW_PATH="$rand_path"
+    while true; do
+        local rand_path
+        rand_path=$(generate_rand_path)
+        read -rp "Enter new Secret Path [default: random 16-chars (${rand_path}), or '/' for root]: " NEW_PATH
+        NEW_PATH=${NEW_PATH:-$rand_path}
+        if [[ "$NEW_PATH" == "/" || "$NEW_PATH" == "root" ]]; then
+            NEW_PATH=""
+            break
+        else
+            NEW_PATH=$(echo "$NEW_PATH" | sed -e 's|^/*||' -e 's|/*$||' | tr -cd 'a-zA-Z0-9_-')
+            if [ -z "$NEW_PATH" ]; then
+                NEW_PATH="$rand_path"
+            fi
+            if is_reserved_path "$NEW_PATH"; then
+                echo -e "${RED}[X] Error: '/${NEW_PATH}' is a reserved system path and cannot be used.${NC}"
+                echo -e "${YELLOW}[!] Reserved paths: login, logout, settings, user, admin, api, backup, restore, static, sub, subscription.${NC}"
+            else
+                break
+            fi
         fi
-    fi
+    done
 
     echo ""
     echo -e "${CYAN}[*] Updating Nginx configuration...${NC}"
